@@ -14,17 +14,13 @@ import type { PseudoLine } from "./types"
 
 function replaySteps(input: ReadonlyArray<number>, result: ReturnType<typeof mergeSort>): number[] {
 	// mergeSort uses PLACE to write each element in the merged output.
-	// We need to track the working state differently — instead we verify
-	// the final result is sorted by checking only the final state after all PLACEs.
-	// A simpler approach: collect all PLACE steps in order and rebuild the array.
-	//
-	// The implementation writes to specific positions via PLACE { indices: [destIndex, value] }.
-	// We replay those writes.
+	// PLACE shape: { indices: [destIndex], value: <element> }
+	// Replay: arr[indices[0]] = value
 	const arr = new Array<number>(input.length).fill(0)
 	for (const step of result.steps) {
 		if (step.kind === SORT_STEP_KIND.PLACE) {
-			const [destIndex, value] = step.indices
-			arr[destIndex] = value
+			const destIndex = step.indices[0]
+			arr[destIndex] = step.value!
 		}
 	}
 	return arr
@@ -38,17 +34,16 @@ describe("mergeSort", () => {
 		expect(sorted).toEqual([1, 2, 3, 4, 5])
 	})
 
-	it("empty array: steps is empty (or only DONE) and metrics.comparisons === 0", () => {
+	it("empty array: steps is empty and metrics.comparisons === 0", () => {
 		const result = mergeSort([])
-		const meaningfulSteps = result.steps.filter((s) => s.kind !== SORT_STEP_KIND.DONE)
-		expect(meaningfulSteps).toHaveLength(0)
+		expect(result.steps).toHaveLength(0)
 		expect(result.metrics.comparisons).toBe(0)
 	})
 
-	it("single-element array: steps is empty (or only DONE) and metrics.comparisons === 0", () => {
+	it("single-element array: exactly one DONE step and metrics.comparisons === 0", () => {
 		const result = mergeSort([42])
-		const meaningfulSteps = result.steps.filter((s) => s.kind !== SORT_STEP_KIND.DONE)
-		expect(meaningfulSteps).toHaveLength(0)
+		expect(result.steps).toHaveLength(1)
+		expect(result.steps[0].kind).toBe(SORT_STEP_KIND.DONE)
 		expect(result.metrics.comparisons).toBe(0)
 	})
 

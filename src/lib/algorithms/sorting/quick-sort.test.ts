@@ -19,10 +19,10 @@ function replaySteps(input: ReadonlyArray<number>, result: ReturnType<typeof qui
 			const [i, j] = step.indices
 			;[arr[i], arr[j]] = [arr[j], arr[i]]
 		} else if (step.kind === SORT_STEP_KIND.PLACE) {
-			// PLACE steps in Lomuto indicate the pivot is placed at index step.indices[0]
-			// with the value from step.indices[1] — but since we're tracking swaps,
-			// PLACE is informational for the visualizer; no additional array mutation needed
-			// as the swap that positions the pivot is already a SWAP step.
+			// PLACE marks the pivot's final position at step.indices[0].
+			// Whether or not a SWAP preceded it (pivotPos === high means no SWAP was emitted),
+			// no additional mutation is required during replay — the pivot's value is
+			// already in the correct slot from prior SWAP steps or from the initial position.
 		}
 	}
 	return arr
@@ -82,12 +82,30 @@ describe("quickSort", () => {
 		const result = quickSort([42])
 		expect(result.metrics.comparisons).toBe(0)
 		expect(result.metrics.swaps).toBe(0)
+		expect(result.steps).toHaveLength(1)
+		expect(result.steps[0].kind).toBe(SORT_STEP_KIND.DONE)
 	})
 
 	it("handles an empty array", () => {
 		const result = quickSort([])
 		expect(result.steps).toHaveLength(0)
 		expect(result.metrics.comparisons).toBe(0)
+	})
+
+	it("metrics.comparisons equals number of COMPARE steps", () => {
+		// [3,1,4,1,5] exercises partitioning with duplicate values and the
+		// i===j skipped-self-swap path, making the consistency check non-trivial.
+		const result = quickSort([3, 1, 4, 1, 5])
+		const compareCount = result.steps.filter((s) => s.kind === SORT_STEP_KIND.COMPARE).length
+		expect(result.metrics.comparisons).toBe(compareCount)
+	})
+
+	it("metrics.swaps equals number of SWAP steps", () => {
+		// Same input exercises the i===j guard (self-swaps are skipped); confirms
+		// metrics.swaps counts only emitted SWAP steps, not skipped self-swaps.
+		const result = quickSort([3, 1, 4, 1, 5])
+		const swapCount = result.steps.filter((s) => s.kind === SORT_STEP_KIND.SWAP).length
+		expect(result.metrics.swaps).toBe(swapCount)
 	})
 })
 

@@ -69,16 +69,34 @@ describe("generateArray — REVERSED mode", () => {
 })
 
 describe("generateArray — FEW_UNIQUE mode", () => {
-	it("generateArray(5, 'few-unique') has ≤ 5 distinct values", () => {
+	it("generateArray(5, 'few-unique') has between 2 and 5 distinct values", () => {
 		const result = generateArray(5, "few-unique")
 		const distinct = new Set(result).size
+		expect(distinct).toBeGreaterThanOrEqual(2)
 		expect(distinct).toBeLessThanOrEqual(5)
 	})
 
-	it("generateArray(20, 'few-unique') has ≤ 5 distinct values", () => {
+	it("generateArray(5, 'few-unique') values are within [1..5]", () => {
+		const result = generateArray(5, "few-unique")
+		for (const v of result) {
+			expect(v).toBeGreaterThanOrEqual(1)
+			expect(v).toBeLessThanOrEqual(5)
+		}
+	})
+
+	it("generateArray(20, 'few-unique') has between 2 and 5 distinct values", () => {
 		const result = generateArray(20, "few-unique")
 		const distinct = new Set(result).size
+		expect(distinct).toBeGreaterThanOrEqual(2)
 		expect(distinct).toBeLessThanOrEqual(5)
+	})
+
+	it("generateArray(20, 'few-unique') values are within [1..20]", () => {
+		const result = generateArray(20, "few-unique")
+		for (const v of result) {
+			expect(v).toBeGreaterThanOrEqual(1)
+			expect(v).toBeLessThanOrEqual(20)
+		}
 	})
 
 	it("is deterministic for same length", () => {

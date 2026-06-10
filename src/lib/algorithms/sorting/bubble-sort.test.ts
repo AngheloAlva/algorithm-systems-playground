@@ -81,6 +81,8 @@ describe("bubbleSort", () => {
 		const result = bubbleSort([42])
 		expect(result.metrics.comparisons).toBe(0)
 		expect(result.metrics.swaps).toBe(0)
+		expect(result.steps).toHaveLength(1)
+		expect(result.steps[0].kind).toBe(SORT_STEP_KIND.DONE)
 	})
 
 	it("handles an empty array", () => {

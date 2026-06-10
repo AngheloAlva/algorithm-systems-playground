@@ -6,8 +6,8 @@
  * output emits a PLACE step; each element comparison in the merge phase emits
  * a COMPARE step.
  *
- * PLACE step indices: [destIndex, value] — allows replaying the full sort by
- * writing `arr[destIndex] = value` for each PLACE step in order.
+ * PLACE step: { indices: [destIndex], value: <element> } — allows replaying
+ * the full sort by writing `arr[indices[0]] = value` for each PLACE step in order.
  *
  * This variant does NOT emit SWAP steps (merge sort does not swap).
  * metrics.swaps is always 0.
@@ -18,8 +18,7 @@
  * ## No React / DOM imports
  */
 
-import { SORT_STEP_KIND, type SortStep, type SortTraceResult } from "./types"
-import type { PseudoLine } from "./types"
+import { SORT_STEP_KIND, type PseudoLine, type SortStep, type SortTraceResult } from "./types"
 
 // ---------------------------------------------------------------------------
 // Pseudocode — co-located with the algorithm
@@ -42,6 +41,7 @@ export const mergeSortPseudocode: PseudoLine[] = [
 	{ id: 13, text: "    else: arr[k] ← rightPart[j]; j ← j+1" },
 	{ id: 14, text: "    k ← k+1" },
 	{ id: 15, text: "  copy remaining elements" },
+	{ id: 16, text: "  return arr" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -70,11 +70,11 @@ function mergeParts(
 
 		if (leftPart[i] <= rightPart[j]) {
 			working[k] = leftPart[i]
-			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k, leftPart[i]], pseudocodeLine: 12 })
+			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: leftPart[i], pseudocodeLine: 12 })
 			i++
 		} else {
 			working[k] = rightPart[j]
-			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k, rightPart[j]], pseudocodeLine: 13 })
+			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: rightPart[j], pseudocodeLine: 13 })
 			j++
 		}
 		k++
@@ -83,7 +83,7 @@ function mergeParts(
 	// Copy remaining left elements
 	while (i < leftPart.length) {
 		working[k] = leftPart[i]
-		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k, leftPart[i]], pseudocodeLine: 15 })
+		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: leftPart[i], pseudocodeLine: 15 })
 		i++
 		k++
 	}
@@ -91,7 +91,7 @@ function mergeParts(
 	// Copy remaining right elements
 	while (j < rightPart.length) {
 		working[k] = rightPart[j]
-		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k, rightPart[j]], pseudocodeLine: 15 })
+		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: rightPart[j], pseudocodeLine: 15 })
 		j++
 		k++
 	}
@@ -131,15 +131,18 @@ export function mergeSort(arr: ReadonlyArray<number>): SortTraceResult {
 	const steps: SortStep[] = []
 	const metrics = { comparisons: 0, swaps: 0 }
 
-	if (n <= 1) {
-		return { steps, metrics: { ...metrics, arrayLength: n } }
+	if (n === 0) {
+		return { steps, metrics: { ...metrics, arrayLength: 0 } }
 	}
 
 	// Work on a mutable copy — original array is never touched
 	const working = [...arr]
-	mergeSortRecursive(working, 0, n - 1, steps, metrics)
 
-	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 5 })
+	if (n > 1) {
+		mergeSortRecursive(working, 0, n - 1, steps, metrics)
+	}
+
+	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 16 })
 
 	return {
 		steps,

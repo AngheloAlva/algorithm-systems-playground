@@ -11,8 +11,7 @@
  * ## No React / DOM imports
  */
 
-import { SORT_STEP_KIND, type SortStep, type SortTraceResult } from "./types"
-import type { PseudoLine } from "./types"
+import { SORT_STEP_KIND, type PseudoLine, type SortStep, type SortTraceResult } from "./types"
 
 // ---------------------------------------------------------------------------
 // Pseudocode — co-located with the algorithm

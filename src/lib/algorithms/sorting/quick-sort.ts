@@ -17,8 +17,7 @@
  * ## No React / DOM imports
  */
 
-import { SORT_STEP_KIND, type SortStep, type SortTraceResult } from "./types"
-import type { PseudoLine } from "./types"
+import { SORT_STEP_KIND, type PseudoLine, type SortStep, type SortTraceResult } from "./types"
 
 // ---------------------------------------------------------------------------
 // Pseudocode — co-located with the algorithm
@@ -39,6 +38,7 @@ export const quickSortPseudocode: PseudoLine[] = [
 	{ id: 11, text: "      swap(arr[i], arr[j])" },
 	{ id: 12, text: "  swap(arr[i+1], arr[high])  // place pivot" },
 	{ id: 13, text: "  return i + 1" },
+	{ id: 14, text: "  return arr" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ export function quickSort(arr: ReadonlyArray<number>): SortTraceResult {
 	const working = [...arr]
 	quickSortRecursive(working, 0, n - 1, steps, metrics)
 
-	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 4 })
+	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 14 })
 
 	return {
 		steps,

@@ -43,10 +43,21 @@ export type SortStepKind = (typeof SORT_STEP_KIND)[keyof typeof SORT_STEP_KIND]
  */
 export interface SortStep {
 	kind: SortStepKind
-	/** 1 or 2 relevant indices; may be empty only for DONE steps. */
+	/**
+	 * Array positions relevant to this step. Always contains valid array indices.
+	 * - COMPARE: [indexA, indexB]
+	 * - SWAP: [indexA, indexB]
+	 * - PLACE: [destIndex] — the destination position being written
+	 * - DONE: [] (empty)
+	 */
 	indices: readonly number[]
 	/** 0-indexed line in the algorithm's own pseudocode array. */
 	pseudocodeLine: number
+	/**
+	 * Element value being written; present only on PLACE steps that write a value,
+	 * e.g. merge sort's write-replay. Replay convention: arr[indices[0]] = value.
+	 */
+	value?: number
 }
 
 // ---------------------------------------------------------------------------

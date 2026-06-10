@@ -17,8 +17,7 @@
  * ## No React / DOM imports
  */
 
-import { SORT_STEP_KIND, type SortStep, type SortTraceResult } from "./types"
-import type { PseudoLine } from "./types"
+import { SORT_STEP_KIND, type PseudoLine, type SortStep, type SortTraceResult } from "./types"
 
 // ---------------------------------------------------------------------------
 // Pseudocode — co-located with the algorithm
@@ -44,6 +43,7 @@ export const heapSortPseudocode: PseudoLine[] = [
 	{ id: 16, text: "  if largest != i:" },
 	{ id: 17, text: "    swap(arr[i], arr[largest])" },
 	{ id: 18, text: "    heapify(arr, n, largest)" },
+	{ id: 19, text: "  return arr" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -123,7 +123,7 @@ export function heapSort(arr: ReadonlyArray<number>): SortTraceResult {
 		heapify(working, i, 0, steps, metrics)
 	}
 
-	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 8 })
+	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 19 })
 
 	return {
 		steps,
