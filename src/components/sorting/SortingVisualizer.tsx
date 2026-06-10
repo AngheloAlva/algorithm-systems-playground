@@ -26,7 +26,7 @@
  * and written on change. arrayLength slider writes are debounced 300ms.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useShallow } from "zustand/react/shallow"
 
@@ -36,6 +36,7 @@ import {
 	selectSortingActiveLine,
 	selectSortingMetrics,
 } from "@/store/sorting-store"
+import { applyStep, replayTo } from "@/lib/algorithms/sorting/replay-state"
 import { SORT_ALGORITHM_REGISTRY } from "@/lib/algorithms/sorting/index"
 import type { SortAlgorithm } from "@/lib/algorithms/sorting/index"
 import { ARRAY_MODE, MIN_ARRAY_LENGTH, MAX_ARRAY_LENGTH } from "@/lib/algorithms/sorting/array-gen"
@@ -125,6 +126,87 @@ export function SortingVisualizer() {
 	const cursor = useSortingStore((s) => s.cursor)
 
 	// -------------------------------------------------------------------------
+	// FIX 1 + FIX 3: Incremental replay state and metrics
+	//
+	// displayArr: the array at the current cursor position (React state so
+	//   the canvas re-renders when it changes).
+	// liveComparisons / liveSwaps: incremental counters (React state, no O(n)
+	//   slice().filter() per frame).
+	//
+	// workingArrRef: mutable copy updated step-by-step; only accessed inside
+	//   the useEffect (never during render — satisfies react-hooks/refs).
+	// traceRefKey / prevCursorRef: bookkeeping refs, also effect-only.
+	// -------------------------------------------------------------------------
+
+	const [displayArr, setDisplayArr] = useState<ReadonlyArray<number>>(arr)
+	const [liveComparisons, setLiveComparisons] = useState(0)
+	const [liveSwaps, setLiveSwaps] = useState(0)
+
+	// Mutable working state — only read/written inside the effect below
+	const workingArrRef = useRef<number[]>([...arr])
+	const traceRefKey = useRef<typeof traceResult>(null)
+	const prevCursorRef = useRef<number>(0)
+	const liveComparisonsRef = useRef<number>(0)
+	const liveSwapsRef = useRef<number>(0)
+
+	// Keep arr ref stable for the effect (avoids stale closure on arr changes).
+	// Updated via useLayoutEffect before browser paint (same pattern as useStepPlayer).
+	const arrRef = useRef<ReadonlyArray<number>>(arr)
+	useLayoutEffect(() => {
+		arrRef.current = arr
+	})
+
+	useEffect(() => {
+		if (traceResult === null) {
+			// No trace — display original array
+			setDisplayArr(arrRef.current)
+			setLiveComparisons(0)
+			setLiveSwaps(0)
+			workingArrRef.current = [...arrRef.current]
+			traceRefKey.current = null
+			prevCursorRef.current = 0
+			liveComparisonsRef.current = 0
+			liveSwapsRef.current = 0
+			return
+		}
+
+		if (traceResult !== traceRefKey.current || cursor < prevCursorRef.current) {
+			// New trace OR cursor moved backwards — full rebuild
+			const rebuilt = replayTo(arrRef.current, traceResult.steps, cursor)
+			workingArrRef.current = rebuilt
+			traceRefKey.current = traceResult
+			prevCursorRef.current = cursor
+			// Recount metrics up to current cursor
+			let c = 0
+			let s = 0
+			for (let i = 0; i <= Math.min(cursor, traceResult.steps.length - 1); i++) {
+				const k = traceResult.steps[i].kind
+				if (k === "compare") c++
+				else if (k === "swap") s++
+			}
+			liveComparisonsRef.current = c
+			liveSwapsRef.current = s
+			setDisplayArr([...workingArrRef.current])
+			setLiveComparisons(c)
+			setLiveSwaps(s)
+		} else {
+			// Cursor advanced forward — apply only the new steps
+			const from = prevCursorRef.current + 1
+			const to = Math.min(cursor, traceResult.steps.length - 1)
+			for (let i = from; i <= to; i++) {
+				applyStep(workingArrRef.current, traceResult.steps[i])
+				const k = traceResult.steps[i].kind
+				if (k === "compare") liveComparisonsRef.current++
+				else if (k === "swap") liveSwapsRef.current++
+			}
+			prevCursorRef.current = cursor
+			setDisplayArr([...workingArrRef.current])
+			setLiveComparisons(liveComparisonsRef.current)
+			setLiveSwaps(liveSwapsRef.current)
+		}
+	}, [cursor, traceResult])
+
+	// -------------------------------------------------------------------------
 	// URL sync — read on mount
 	// -------------------------------------------------------------------------
 
@@ -173,6 +255,15 @@ export function SortingVisualizer() {
 	}, [])
 
 	// -------------------------------------------------------------------------
+	// FIX 2: pendingPlayRef — replaces setTimeout(0) race
+	// -------------------------------------------------------------------------
+
+	const PENDING_NONE = 0
+	const PENDING_PLAY = 1
+	const PENDING_STEP = 2
+	const pendingActionRef = useRef<0 | 1 | 2>(PENDING_NONE)
+
+	// -------------------------------------------------------------------------
 	// useStepPlayer integration
 	// -------------------------------------------------------------------------
 
@@ -187,15 +278,19 @@ export function SortingVisualizer() {
 
 	const player = useStepPlayer({ length: traceLength, speed, onAdvance })
 
-	// Sync player stop → store status
+	// Destructure player for stable references in effects (avoids exhaustive-deps
+	// warnings from accessing properties via the `player` binding).
+	const { status: playerStatus, pause: playerPause } = player
+
+	// FIX 5: Sync player stop → store status
+	// playerPause is useCallback-stable from useStepPlayer; all deps are explicit.
 	useEffect(() => {
 		if (status === SORTING_RUN_STATUS.IDLE || status === SORTING_RUN_STATUS.DONE) {
-			if (player.status === PLAYER_STATUS.PLAYING) {
-				player.pause()
+			if (playerStatus === PLAYER_STATUS.PLAYING) {
+				playerPause()
 			}
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [status])
+	}, [status, playerStatus, playerPause])
 
 	// Mirror player done → store done
 	useEffect(() => {
@@ -207,29 +302,34 @@ export function SortingVisualizer() {
 		}
 	}, [player.status, status, setStatus])
 
-	// -------------------------------------------------------------------------
-	// ARIA live region for sort completion and array generation
-	// -------------------------------------------------------------------------
-
-	const [liveText, setLiveText] = useState("")
-
-	// Announce on sort completion
+	// FIX 2: consume pendingActionRef once traceResult is committed
 	useEffect(() => {
-		if (
-			status === SORTING_RUN_STATUS.DONE &&
-			player.status === PLAYER_STATUS.DONE &&
-			metrics !== null
-		) {
-			const algoLabel = SORT_ALGORITHM_REGISTRY[algorithm].label
-			// eslint-disable-next-line react-hooks/set-state-in-effect
-			setLiveText(
-				`${algoLabel} completed. ${metrics.comparisons} comparisons, ${metrics.swaps} swaps.`
-			)
+		if (traceResult === null) return
+		const pending = pendingActionRef.current
+		if (pending === PENDING_NONE) return
+		// Guard: clear before acting to prevent re-entrant triggers
+		pendingActionRef.current = PENDING_NONE
+		player.seek(0)
+		if (pending === PENDING_PLAY) {
+			player.play()
+			setStatus(SORTING_RUN_STATUS.RUNNING)
+		} else {
+			player.step()
+			setStatus(SORTING_RUN_STATUS.PAUSED)
 		}
-	}, [status, player.status, metrics, algorithm])
+	}, [traceResult, player, setStatus])
 
 	// -------------------------------------------------------------------------
-	// Run button handler
+	// ARIA live region for sort completion and array generation (FIX 4)
+	// -------------------------------------------------------------------------
+
+	// Transient announcements for generate-array action
+	const [generateText, setGenerateText] = useState("")
+
+	// liveText is assembled after isDone is computed (see below in "Derived state")
+
+	// -------------------------------------------------------------------------
+	// Run button handler (FIX 2: no setTimeout race)
 	// -------------------------------------------------------------------------
 
 	const handleRun = useCallback(() => {
@@ -245,24 +345,23 @@ export function SortingVisualizer() {
 			return
 		}
 
-		// Fresh run — compute trace, seek player to 0, then play
-		run()
+		// Guard: if already pending, ignore re-entrant click
+		if (pendingActionRef.current !== PENDING_NONE) return
+
+		// Fresh run — set pending flag, then call run().
+		// The useEffect watching traceResult will seek(0) + play() once the
+		// new trace is committed to the store (avoids setTimeout(0) race).
+		pendingActionRef.current = PENDING_PLAY
 		player.reset()
-		setTimeout(() => {
-			player.seek(0)
-			player.play()
-			setStatus(SORTING_RUN_STATUS.RUNNING)
-		}, 0)
+		run()
 	}, [status, player, run, setStatus])
 
 	const handleStep = useCallback(() => {
 		if (status === SORTING_RUN_STATUS.IDLE) {
+			// Guard: if already pending, ignore re-entrant click
+			if (pendingActionRef.current !== PENDING_NONE) return
+			pendingActionRef.current = PENDING_STEP
 			run()
-			setTimeout(() => {
-				player.seek(0)
-				player.step()
-				setStatus(SORTING_RUN_STATUS.PAUSED)
-			}, 0)
 			return
 		}
 		player.step()
@@ -277,7 +376,7 @@ export function SortingVisualizer() {
 	const handleGenerate = useCallback(() => {
 		player.reset()
 		generateArray()
-		setLiveText(`New array generated. Length: ${arrayLength}.`)
+		setGenerateText(`New array generated. Length: ${arrayLength}.`)
 	}, [player, generateArray, arrayLength])
 
 	// -------------------------------------------------------------------------
@@ -350,14 +449,16 @@ export function SortingVisualizer() {
 	// Algorithm pseudocode
 	const { pseudocode, label: algoLabel } = SORT_ALGORITHM_REGISTRY[algorithm]
 
-	// Live metrics derived from current cursor position
-	// Count comparisons and swaps up to the current cursor
-	const liveComparisons = traceResult
-		? traceResult.steps.slice(0, cursor + 1).filter((s) => s.kind === "compare").length
-		: 0
-	const liveSwaps = traceResult
-		? traceResult.steps.slice(0, cursor + 1).filter((s) => s.kind === "swap").length
-		: 0
+	// liveComparisons and liveSwaps are React state — updated incrementally
+	// by the replay effect above (FIX 3: no O(steps) slice().filter() per render).
+
+	// FIX 4: Single live text — derived completion text (no setState-in-effect) plus
+	// transient generation announcement from handleGenerate.
+	const completionText =
+		isDone && metrics !== null
+			? `${algoLabel} completed. ${metrics.comparisons} comparisons, ${metrics.swaps} swaps.`
+			: ""
+	const liveText = completionText || generateText
 
 	// -------------------------------------------------------------------------
 	// Render
@@ -448,7 +549,7 @@ export function SortingVisualizer() {
 				<div className="flex-1 overflow-auto">
 					<div className="bg-muted/20 border-border min-h-64 rounded-md border" style={{ height: 320 }}>
 						<SortingCanvas
-							arr={arr}
+							arr={displayArr}
 							currentStep={currentStep}
 							status={statusDescription}
 							className="h-full w-full"
@@ -550,21 +651,9 @@ export function SortingVisualizer() {
 						</div>
 					</ControlPanel>
 
-					{/* Metrics */}
+					{/* Metrics (FIX 4: no aria-live here — all announcements go through the single liveText region) */}
 					<ControlPanel title="Metrics">
 						<div className="flex flex-col gap-2">
-							{/* ARIA live region for completion announcement */}
-							<div
-								role="status"
-								aria-live="polite"
-								aria-atomic="true"
-								className="sr-only"
-							>
-								{isDone && metrics !== null
-									? `${algoLabel} completed. ${metrics.comparisons} comparisons, ${metrics.swaps} swaps.`
-									: ""}
-							</div>
-
 							<dl className="grid grid-cols-3 gap-2 text-sm">
 								<div className="flex flex-col gap-0.5">
 									<dt className="text-muted-foreground text-xs">Comparisons</dt>

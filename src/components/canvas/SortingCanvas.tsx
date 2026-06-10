@@ -186,8 +186,7 @@ export function SortingCanvas({ arr, currentStep, status, className }: SortingCa
 	)
 
 	// Compute accessible label from status and arr info
-	const stepCount = 0 // updated by parent via SortingVisualizer
-	const ariaLabel = `Sorting visualization: ${arr.length}-element array, ${status}${stepCount > 0 ? `, step ${stepCount}` : ""}`
+	const ariaLabel = `Sorting visualization: ${arr.length}-element array, ${status}`
 
 	return (
 		<div
