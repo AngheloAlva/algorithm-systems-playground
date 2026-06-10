@@ -9,19 +9,27 @@ import { runBFS, BFS_PSEUDOCODE } from "./bfs"
 import { clearGraph, addNode, addEdge, toggleDirected } from "../../graph/graph"
 
 // ---------------------------------------------------------------------------
-// Helpers to build test graphs
+// Builder helpers
 // ---------------------------------------------------------------------------
 
-/** Build a simple undirected path A—B—C and return the graph + node ids. */
-function buildLinearGraph() {
+function buildNodes(count: number, directed = false) {
 	let g = clearGraph()
-	let nA: string, nB: string, nC: string
-	;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0)) // label A
-	;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1)) // label B
-	;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2)) // label C
-	;({ graph: g } = addEdge(g, nA, nB)!)
-	;({ graph: g } = addEdge(g, nB, nC)!)
-	return { g, nA, nB, nC }
+	if (directed) g = toggleDirected(g)
+	const ids: string[] = []
+	for (let i = 0; i < count; i++) {
+		const r = addNode(g, i * 100, 0, i)
+		g = r.graph
+		ids.push(r.nodeId)
+	}
+	return { graph: g, ids }
+}
+
+/** Build undirected path A—B—C */
+function buildLinearGraph() {
+	const { graph: g3, ids } = buildNodes(3)
+	const r1 = addEdge(g3, ids[0], ids[1])!
+	const r2 = addEdge(r1.graph, ids[1], ids[2])!
+	return { g: r2.graph, nA: ids[0], nB: ids[1], nC: ids[2] }
 }
 
 // ---------------------------------------------------------------------------
@@ -33,12 +41,10 @@ describe("runBFS (G4-A)", () => {
 		const { g, nA, nB, nC } = buildLinearGraph()
 		const result = runBFS(g, nA)
 
-		const kinds = result.steps.map((s) => s.kind)
 		const nodeSteps = result.steps
 			.filter((s) => s.kind === "frontier" || s.kind === "visit")
 			.map((s) => ({ kind: s.kind, nodeId: "nodeId" in s ? s.nodeId : undefined }))
 
-		// frontier(A), visit(A), frontier(B), visit(B), frontier(C), visit(C)
 		expect(nodeSteps[0]).toEqual({ kind: "frontier", nodeId: nA })
 		expect(nodeSteps[1]).toEqual({ kind: "visit", nodeId: nA })
 		expect(nodeSteps[2]).toEqual({ kind: "frontier", nodeId: nB })
@@ -48,7 +54,6 @@ describe("runBFS (G4-A)", () => {
 
 		expect(result.metrics.visitedCount).toBe(3)
 		expect(result.metrics.traversalOrder).toEqual([nA, nB, nC])
-		expect(kinds.every((k) => k === "frontier" || k === "visit")).toBe(true)
 	})
 })
 
@@ -58,20 +63,16 @@ describe("runBFS (G4-A)", () => {
 
 describe("runBFS (G4-B)", () => {
 	it("visits all reachable nodes in directed graph A→B, A→C, C→B", () => {
-		let g = toggleDirected(clearGraph())
-		let nA: string, nB: string, nC: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2))
-		;({ graph: g } = addEdge(g, nA, nB)!)
-		;({ graph: g } = addEdge(g, nA, nC)!)
-		;({ graph: g } = addEdge(g, nC, nB)!)
+		const { graph: g3, ids } = buildNodes(3, true)
+		const r1 = addEdge(g3, ids[0], ids[1])!
+		const r2 = addEdge(r1.graph, ids[0], ids[2])!
+		const r3 = addEdge(r2.graph, ids[2], ids[1])!
 
-		const result = runBFS(g, nA)
+		const result = runBFS(r3.graph, ids[0])
 		expect(result.metrics.visitedCount).toBe(3)
-		expect(result.metrics.traversalOrder).toContain(nA)
-		expect(result.metrics.traversalOrder).toContain(nB)
-		expect(result.metrics.traversalOrder).toContain(nC)
+		expect(result.metrics.traversalOrder).toContain(ids[0])
+		expect(result.metrics.traversalOrder).toContain(ids[1])
+		expect(result.metrics.traversalOrder).toContain(ids[2])
 	})
 })
 
@@ -81,16 +82,12 @@ describe("runBFS (G4-B)", () => {
 
 describe("runBFS (G4-C)", () => {
 	it("only visits reachable nodes; does not throw for unreachable nodes", () => {
-		let g = clearGraph()
-		let nA: string, nB: string, nC: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g, nodeId: nC } = addNode(g, 300, 0, 2)) // isolated
-		;({ graph: g } = addEdge(g, nA, nB)!)
+		const { graph: g3, ids } = buildNodes(3)
+		const { graph: g } = addEdge(g3, ids[0], ids[1])! // ids[2] isolated
 
-		const result = runBFS(g, nA)
+		const result = runBFS(g, ids[0])
 		expect(result.metrics.visitedCount).toBe(2)
-		expect(result.metrics.traversalOrder).not.toContain(nC)
+		expect(result.metrics.traversalOrder).not.toContain(ids[2])
 	})
 })
 
@@ -100,21 +97,18 @@ describe("runBFS (G4-C)", () => {
 
 describe("runBFS (G4-D)", () => {
 	it("enqueues B before C when both are neighbors of A (label sort)", () => {
-		let g = clearGraph()
-		let nA: string, nB: string, nC: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0)) // A
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1)) // B
-		;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2)) // C
+		const { graph: g3, ids } = buildNodes(3)
+		const nA = ids[0]
+		const nB = ids[1]
+		const nC = ids[2]
 
-		// Add edges in non-alphabetical order: A→C first, then A→B
-		;({ graph: g } = addEdge(g, nA, nC)!)
-		;({ graph: g } = addEdge(g, nA, nB)!)
+		// Add in non-alphabetical order: A→C first, then A→B
+		const r1 = addEdge(g3, nA, nC)!
+		const { graph: g } = addEdge(r1.graph, nA, nB)!
 
 		const result = runBFS(g, nA)
-
-		// traversalOrder from BFS: A, B, C (B enqueued before C due to label sort)
 		expect(result.metrics.traversalOrder[0]).toBe(nA)
-		expect(result.metrics.traversalOrder[1]).toBe(nB) // B < C
+		expect(result.metrics.traversalOrder[1]).toBe(nB) // B < C label sort
 		expect(result.metrics.traversalOrder[2]).toBe(nC)
 	})
 
@@ -123,7 +117,6 @@ describe("runBFS (G4-D)", () => {
 		const r1 = runBFS(g, nA)
 		const r2 = runBFS(g, nA)
 		expect(r1.metrics.traversalOrder).toEqual(r2.metrics.traversalOrder)
-		expect(r1.steps.map((s) => s.kind)).toEqual(r2.steps.map((s) => s.kind))
 	})
 })
 

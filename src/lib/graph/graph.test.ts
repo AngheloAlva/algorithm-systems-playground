@@ -18,7 +18,26 @@ import {
 	hasEdgeBetween,
 	labelFromIndex,
 } from "./graph"
-import type { GraphData } from "./types"
+
+// ---------------------------------------------------------------------------
+// Utility builders
+// ---------------------------------------------------------------------------
+
+/** Build a graph with N nodes and return ids + final graph. */
+function buildNodes(
+	count: number,
+	directed = false
+): { graph: ReturnType<typeof clearGraph>; ids: string[] } {
+	let g = clearGraph()
+	if (directed) g = toggleDirected(g)
+	const ids: string[] = []
+	for (let i = 0; i < count; i++) {
+		const r = addNode(g, i * 100, 0, i)
+		g = r.graph
+		ids.push(r.nodeId)
+	}
+	return { graph: g, ids }
+}
 
 // ---------------------------------------------------------------------------
 // labelFromIndex (G1-A support)
@@ -93,10 +112,8 @@ describe("Map reactivity invariant", () => {
 	})
 
 	it("addEdge returns new GraphData and new edges Map", () => {
-		const g0 = clearGraph()
-		const { graph: g1, nodeId: n1 } = addNode(g0, 0, 0, 0)
-		const { graph: g2, nodeId: n2 } = addNode(g1, 100, 0, 1)
-		const result = addEdge(g2, n1, n2)
+		const { graph: g2, ids } = buildNodes(2)
+		const result = addEdge(g2, ids[0], ids[1])
 		expect(result).not.toBeNull()
 		const g3 = result!.graph
 		expect(g3).not.toBe(g2)
@@ -124,16 +141,19 @@ describe("Map reactivity invariant", () => {
 
 describe("removeNode (G2-A)", () => {
 	it("removes node and all incident edges, preserves non-incident edges", () => {
-		const g0 = clearGraph()
-		const { graph: g1, nodeId: n1 } = addNode(g0, 0, 0, 0)
-		const { graph: g2, nodeId: n2 } = addNode(g1, 100, 0, 1)
-		const { graph: g3, nodeId: n3 } = addNode(g2, 200, 0, 2)
+		const { graph: g3, ids } = buildNodes(3)
+		const n1 = ids[0]
+		const n2 = ids[1]
+		const n3 = ids[2]
 
-		const { graph: g4, edgeId: e1 } = addEdge(g3, n1, n2)! // n1→n2
-		const { graph: g5, edgeId: e2 } = addEdge(g4, n2, n3)! // n2→n3
-		const { graph: g6, edgeId: e3 } = addEdge(g5, n1, n3)! // n1→n3
+		const r1 = addEdge(g3, n1, n2)! // n1→n2
+		const r2 = addEdge(r1.graph, n2, n3)! // n2→n3
+		const r3 = addEdge(r2.graph, n1, n3)! // n1→n3
+		const e1 = r1.edgeId
+		const e2 = r2.edgeId
+		const e3 = r3.edgeId
 
-		const g7 = removeNode(g6, n2) // delete n2, should cascade e1 and e2
+		const g7 = removeNode(r3.graph, n2) // delete n2, should cascade e1 and e2
 
 		expect(g7.nodes.size).toBe(2)
 		expect(g7.nodes.has(n1)).toBe(true)
@@ -173,35 +193,26 @@ describe("addEdge self-loop rejection (G2-B)", () => {
 
 describe("addEdge parallel-edge rejection directed (G2-C)", () => {
 	it("rejects duplicate directed edge n1→n2", () => {
-		const g0 = clearGraph()
-		let g = g0
-		let n1: string, n2: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		g = toggleDirected(g) // directed: true
+		const { graph: gBase, ids } = buildNodes(2, true)
+		const n1 = ids[0]
+		const n2 = ids[1]
 
-		const r1 = addEdge(g, n1, n2)
+		const r1 = addEdge(gBase, n1, n2)
 		expect(r1).not.toBeNull()
 		const g2 = r1!.graph
 
-		// Attempt duplicate
 		const r2 = addEdge(g2, n1, n2)
 		expect(r2).toBeNull()
 		expect(g2.edges.size).toBe(1)
 	})
 
 	it("allows reverse edge n2→n1 in directed mode", () => {
-		let g = clearGraph()
-		let n1: string, n2: string
-		g = toggleDirected(g)
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
+		const { graph: gBase, ids } = buildNodes(2, true)
+		const n1 = ids[0]
+		const n2 = ids[1]
 
-		const r1 = addEdge(g, n1, n2)
-		expect(r1).not.toBeNull()
-		const g2 = r1!.graph
-
-		const r2 = addEdge(g2, n2, n1)
+		const r1 = addEdge(gBase, n1, n2)!
+		const r2 = addEdge(r1.graph, n2, n1)
 		expect(r2).not.toBeNull()
 		expect(r2!.graph.edges.size).toBe(2)
 	})
@@ -213,18 +224,14 @@ describe("addEdge parallel-edge rejection directed (G2-C)", () => {
 
 describe("addEdge parallel-edge rejection undirected (G2-D)", () => {
 	it("rejects reversed pair in undirected mode", () => {
-		let g = clearGraph() // directed: false
-		let n1: string, n2: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
+		const { graph: gBase, ids } = buildNodes(2) // directed: false
+		const n1 = ids[0]
+		const n2 = ids[1]
 
-		const r1 = addEdge(g, n1, n2)
-		expect(r1).not.toBeNull()
-		const g2 = r1!.graph
-
-		const r2 = addEdge(g2, n2, n1) // reversed
+		const r1 = addEdge(gBase, n1, n2)!
+		const r2 = addEdge(r1.graph, n2, n1) // reversed
 		expect(r2).toBeNull()
-		expect(g2.edges.size).toBe(1)
+		expect(r1.graph.edges.size).toBe(1)
 	})
 })
 
@@ -234,26 +241,21 @@ describe("addEdge parallel-edge rejection undirected (G2-D)", () => {
 
 describe("toggleDirected (G2-E)", () => {
 	it("flips directed flag without changing edges", () => {
-		let g = clearGraph()
-		let n1: string, n2: string, n3: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g, nodeId: n3 } = addNode(g, 200, 0, 2))
-
-		const r1 = addEdge(g, n1, n2)!
-		const r2 = addEdge(r1.graph, n2, n3)!
+		const { graph: g3, ids } = buildNodes(3)
+		const r1 = addEdge(g3, ids[0], ids[1])!
+		const r2 = addEdge(r1.graph, ids[1], ids[2])!
 		const g2 = r2.graph
 
 		expect(g2.directed).toBe(false)
 		expect(g2.edges.size).toBe(2)
 
-		const g3 = toggleDirected(g2)
-		expect(g3.directed).toBe(true)
-		expect(g3.edges.size).toBe(2)
+		const g3t = toggleDirected(g2)
+		expect(g3t.directed).toBe(true)
+		expect(g3t.edges.size).toBe(2)
 
 		// Same edge ids and weights
 		g2.edges.forEach((edge) => {
-			const toggled = g3.edges.get(edge.id)
+			const toggled = g3t.edges.get(edge.id)
 			expect(toggled).toBeDefined()
 			expect(toggled!.weight).toBe(edge.weight)
 		})
@@ -275,14 +277,12 @@ describe("loadSampleGraph (G2-F)", () => {
 		expect(g1.edges.size).toBeGreaterThanOrEqual(6)
 		expect(g1.directed).toBe(false)
 
-		// Same labels in both calls
 		const labels1 = [...g1.nodes.values()].map((n) => n.label).sort()
 		const labels2 = [...g2.nodes.values()].map((n) => n.label).sort()
 		expect(labels1).toEqual(labels2)
 	})
 
-	it("has at least one cycle (≥ edges.size >= nodes.size for undirected)", () => {
-		// A graph with n nodes and at least n edges has a cycle
+	it("has at least one cycle (edges.size >= nodes.size for undirected)", () => {
 		const g = loadSampleGraph()
 		expect(g.edges.size).toBeGreaterThanOrEqual(g.nodes.size)
 	})
@@ -313,36 +313,24 @@ describe("addNode soft cap (G2-G)", () => {
 
 describe("setEdgeWeight (G2-H)", () => {
 	it("updates weight when positive", () => {
-		let g = clearGraph()
-		let n1: string, n2: string, e1: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g, edgeId: e1 } = addEdge(g, n1, n2)!)
-
+		const { graph: gBase, ids } = buildNodes(2)
+		const { graph: g, edgeId: e1 } = addEdge(gBase, ids[0], ids[1])!
 		const g2 = setEdgeWeight(g, e1, 5)
 		expect(g2.edges.get(e1)!.weight).toBe(5)
 	})
 
 	it("rejects weight of 0", () => {
-		let g = clearGraph()
-		let n1: string, n2: string, e1: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g, edgeId: e1 } = addEdge(g, n1, n2)!)
-
+		const { graph: gBase, ids } = buildNodes(2)
+		const { graph: g, edgeId: e1 } = addEdge(gBase, ids[0], ids[1])!
 		const initialWeight = g.edges.get(e1)!.weight
 		const g2 = setEdgeWeight(g, e1, 0)
 		expect(g2.edges.get(e1)!.weight).toBe(initialWeight)
-		expect(g2).toBe(g) // unchanged reference
+		expect(g2).toBe(g)
 	})
 
 	it("rejects negative weight", () => {
-		let g = clearGraph()
-		let n1: string, n2: string, e1: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g, edgeId: e1 } = addEdge(g, n1, n2)!)
-
+		const { graph: gBase, ids } = buildNodes(2)
+		const { graph: g, edgeId: e1 } = addEdge(gBase, ids[0], ids[1])!
 		const initialWeight = g.edges.get(e1)!.weight
 		const g2 = setEdgeWeight(g, e1, -5)
 		expect(g2.edges.get(e1)!.weight).toBe(initialWeight)
@@ -355,12 +343,8 @@ describe("setEdgeWeight (G2-H)", () => {
 
 describe("addEdge default weight (G1-C)", () => {
 	it("defaults weight to 1 when not supplied", () => {
-		let g = clearGraph()
-		let n1: string, n2: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-
-		const result = addEdge(g, n1, n2)
+		const { graph: gBase, ids } = buildNodes(2)
+		const result = addEdge(gBase, ids[0], ids[1])
 		expect(result).not.toBeNull()
 		expect(result!.graph.edges.get(result!.edgeId)!.weight).toBe(1)
 	})
@@ -372,15 +356,11 @@ describe("addEdge default weight (G1-C)", () => {
 
 describe("removeEdge", () => {
 	it("removes the specified edge", () => {
-		let g = clearGraph()
-		let n1: string, n2: string, e1: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g, edgeId: e1 } = addEdge(g, n1, n2)!)
-
+		const { graph: gBase, ids } = buildNodes(2)
+		const { graph: g, edgeId: e1 } = addEdge(gBase, ids[0], ids[1])!
 		const g2 = removeEdge(g, e1)
 		expect(g2.edges.has(e1)).toBe(false)
-		expect(g2.nodes.size).toBe(2) // nodes unaffected
+		expect(g2.nodes.size).toBe(2)
 	})
 
 	it("is a no-op for unknown edge id", () => {
@@ -396,25 +376,17 @@ describe("removeEdge", () => {
 
 describe("hasEdgeBetween", () => {
 	it("returns true for existing directed edge a→b", () => {
-		let g = toggleDirected(clearGraph())
-		let n1: string, n2: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g } = addEdge(g, n1, n2)!)
-
-		expect(hasEdgeBetween(g, n1, n2)).toBe(true)
-		expect(hasEdgeBetween(g, n2, n1)).toBe(false) // directed
+		const { graph: gBase, ids } = buildNodes(2, true)
+		const { graph: g } = addEdge(gBase, ids[0], ids[1])!
+		expect(hasEdgeBetween(g, ids[0], ids[1])).toBe(true)
+		expect(hasEdgeBetween(g, ids[1], ids[0])).toBe(false)
 	})
 
 	it("returns true for either direction in undirected mode", () => {
-		let g = clearGraph()
-		let n1: string, n2: string
-		;({ graph: g, nodeId: n1 } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: n2 } = addNode(g, 100, 0, 1))
-		;({ graph: g } = addEdge(g, n1, n2)!)
-
-		expect(hasEdgeBetween(g, n1, n2)).toBe(true)
-		expect(hasEdgeBetween(g, n2, n1)).toBe(true)
+		const { graph: gBase, ids } = buildNodes(2)
+		const { graph: g } = addEdge(gBase, ids[0], ids[1])!
+		expect(hasEdgeBetween(g, ids[0], ids[1])).toBe(true)
+		expect(hasEdgeBetween(g, ids[1], ids[0])).toBe(true)
 	})
 })
 

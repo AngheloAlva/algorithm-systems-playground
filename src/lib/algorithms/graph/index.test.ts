@@ -8,6 +8,27 @@ import { describe, it, expect } from "vitest"
 import { GRAPH_ALGORITHM_REGISTRY } from "./index"
 import { clearGraph, addNode, addEdge } from "../../graph/graph"
 
+// ---------------------------------------------------------------------------
+// Builder helpers
+// ---------------------------------------------------------------------------
+
+function buildLinearGraph() {
+	let g = clearGraph()
+	const ids: string[] = []
+	for (let i = 0; i < 3; i++) {
+		const r = addNode(g, i * 100, 0, i)
+		g = r.graph
+		ids.push(r.nodeId)
+	}
+	const r1 = addEdge(g, ids[0], ids[1])!
+	const { graph } = addEdge(r1.graph, ids[1], ids[2])!
+	return { graph, ids }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe("GRAPH_ALGORITHM_REGISTRY (G6-A)", () => {
 	it("has keys 'bfs' and 'dfs'", () => {
 		expect(Object.keys(GRAPH_ALGORITHM_REGISTRY)).toContain("bfs")
@@ -15,7 +36,7 @@ describe("GRAPH_ALGORITHM_REGISTRY (G6-A)", () => {
 	})
 
 	it("each entry has required shape fields", () => {
-		for (const [, entry] of Object.entries(GRAPH_ALGORITHM_REGISTRY)) {
+		for (const entry of Object.values(GRAPH_ALGORITHM_REGISTRY)) {
 			expect(typeof entry.id).toBe("string")
 			expect(typeof entry.label).toBe("string")
 			expect(typeof entry.run).toBe("function")
@@ -33,16 +54,9 @@ describe("GRAPH_ALGORITHM_REGISTRY (G6-A)", () => {
 	})
 
 	it("each entry's pseudocode covers all emitted line indices", () => {
-		let g = clearGraph()
-		let nA: string, nB: string, nC: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2))
-		;({ graph: g } = addEdge(g, nA, nB)!)
-		;({ graph: g } = addEdge(g, nB, nC)!)
-
-		for (const [, entry] of Object.entries(GRAPH_ALGORITHM_REGISTRY)) {
-			const result = entry.run(g, nA)
+		const { graph, ids } = buildLinearGraph()
+		for (const entry of Object.values(GRAPH_ALGORITHM_REGISTRY)) {
+			const result = entry.run(graph, ids[0])
 			const maxLine = Math.max(-1, ...result.steps.map((s) => s.line))
 			expect(entry.pseudocode.length).toBeGreaterThan(maxLine)
 		}

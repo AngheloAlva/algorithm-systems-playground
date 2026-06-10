@@ -9,21 +9,33 @@ import { runDFS, DFS_PSEUDOCODE } from "./dfs"
 import { clearGraph, addNode, addEdge, toggleDirected } from "../../graph/graph"
 
 // ---------------------------------------------------------------------------
+// Builder helpers
+// ---------------------------------------------------------------------------
+
+function buildNodes(count: number, directed = false) {
+	let g = clearGraph()
+	if (directed) g = toggleDirected(g)
+	const ids: string[] = []
+	for (let i = 0; i < count; i++) {
+		const r = addNode(g, i * 100, 0, i)
+		g = r.graph
+		ids.push(r.nodeId)
+	}
+	return { graph: g, ids }
+}
+
+// ---------------------------------------------------------------------------
 // G5-A — DFS on simple path A-B-C
 // ---------------------------------------------------------------------------
 
 describe("runDFS (G5-A)", () => {
 	it("visits A, B, C in depth-first label-sorted order", () => {
-		let g = clearGraph()
-		let nA: string, nB: string, nC: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2))
-		;({ graph: g } = addEdge(g, nA, nB)!)
-		;({ graph: g } = addEdge(g, nB, nC)!)
+		const { graph: g3, ids } = buildNodes(3)
+		const r1 = addEdge(g3, ids[0], ids[1])!
+		const { graph: g } = addEdge(r1.graph, ids[1], ids[2])!
 
-		const result = runDFS(g, nA)
-		expect(result.metrics.traversalOrder).toEqual([nA, nB, nC])
+		const result = runDFS(g, ids[0])
+		expect(result.metrics.traversalOrder).toEqual([ids[0], ids[1], ids[2]])
 		expect(result.metrics.visitedCount).toBe(3)
 	})
 })
@@ -34,18 +46,13 @@ describe("runDFS (G5-A)", () => {
 
 describe("runDFS (G5-B)", () => {
 	it("reaches D only via B in directed graph A→B, A→C, B→D", () => {
-		let g = toggleDirected(clearGraph())
-		let nA: string, nB: string, nC: string, nD: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0)) // A
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1)) // B
-		;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2)) // C
-		;({ graph: g, nodeId: nD } = addNode(g, 300, 0, 3)) // D
-		;({ graph: g } = addEdge(g, nA, nB)!)
-		;({ graph: g } = addEdge(g, nA, nC)!)
-		;({ graph: g } = addEdge(g, nB, nD)!)
+		const { graph: g4, ids } = buildNodes(4, true)
+		const r1 = addEdge(g4, ids[0], ids[1])!
+		const r2 = addEdge(r1.graph, ids[0], ids[2])!
+		const { graph: g } = addEdge(r2.graph, ids[1], ids[3])!
 
-		const result = runDFS(g, nA)
-		expect(result.metrics.traversalOrder).toContain(nD)
+		const result = runDFS(g, ids[0])
+		expect(result.metrics.traversalOrder).toContain(ids[3])
 		expect(result.metrics.visitedCount).toBe(4)
 	})
 })
@@ -55,21 +62,16 @@ describe("runDFS (G5-B)", () => {
 // ---------------------------------------------------------------------------
 
 describe("runDFS (G5-C)", () => {
-	it("only visits nodes in start component; unreachable nodes absent from trace", () => {
-		let g = clearGraph()
-		let nA: string, nB: string, nC: string, nD: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0)) // component 1
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1)) // component 1
-		;({ graph: g, nodeId: nC } = addNode(g, 300, 0, 2)) // component 2
-		;({ graph: g, nodeId: nD } = addNode(g, 400, 0, 3)) // component 2
-		;({ graph: g } = addEdge(g, nA, nB)!)
-		;({ graph: g } = addEdge(g, nC, nD)!)
+	it("only visits nodes in start component", () => {
+		const { graph: g4, ids } = buildNodes(4)
+		const r1 = addEdge(g4, ids[0], ids[1])! // component 1
+		const { graph: g } = addEdge(r1.graph, ids[2], ids[3])! // component 2
 
-		const result = runDFS(g, nA)
-		expect(result.metrics.traversalOrder).toContain(nA)
-		expect(result.metrics.traversalOrder).toContain(nB)
-		expect(result.metrics.traversalOrder).not.toContain(nC)
-		expect(result.metrics.traversalOrder).not.toContain(nD)
+		const result = runDFS(g, ids[0])
+		expect(result.metrics.traversalOrder).toContain(ids[0])
+		expect(result.metrics.traversalOrder).toContain(ids[1])
+		expect(result.metrics.traversalOrder).not.toContain(ids[2])
+		expect(result.metrics.traversalOrder).not.toContain(ids[3])
 	})
 })
 
@@ -79,17 +81,16 @@ describe("runDFS (G5-C)", () => {
 
 describe("runDFS — reverse-push convention (G5.4)", () => {
 	it("pushes neighbors in reverse sorted order so smallest-label is popped first", () => {
-		// A connected to B and C; DFS from A should visit B before C
-		let g = clearGraph()
-		let nA: string, nB: string, nC: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g, nodeId: nC } = addNode(g, 200, 0, 2))
-		;({ graph: g } = addEdge(g, nA, nC)!) // Add C first
-		;({ graph: g } = addEdge(g, nA, nB)!) // Then B
+		const { graph: g3, ids } = buildNodes(3)
+		const nA = ids[0]
+		const nB = ids[1]
+		const nC = ids[2]
+
+		// Add C first, then B — ordering should be by label not insertion
+		const r1 = addEdge(g3, nA, nC)!
+		const { graph: g } = addEdge(r1.graph, nA, nB)!
 
 		const result = runDFS(g, nA)
-		// B has smaller label — should be visited before C
 		const order = result.metrics.traversalOrder
 		const bIdx = order.indexOf(nB)
 		const cIdx = order.indexOf(nC)
@@ -102,14 +103,11 @@ describe("runDFS — reverse-push convention (G5.4)", () => {
 // ---------------------------------------------------------------------------
 
 describe("runDFS step kinds", () => {
-	it("emits frontier on push and visit on pop (when not already visited)", () => {
-		let g = clearGraph()
-		let nA: string, nB: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g } = addEdge(g, nA, nB)!)
+	it("emits frontier on push and visit on pop", () => {
+		const { graph: g2, ids } = buildNodes(2)
+		const { graph: g } = addEdge(g2, ids[0], ids[1])!
 
-		const result = runDFS(g, nA)
+		const result = runDFS(g, ids[0])
 		const kinds = result.steps.map((s) => s.kind)
 		expect(kinds).toContain("frontier")
 		expect(kinds).toContain("visit")
@@ -122,13 +120,10 @@ describe("runDFS step kinds", () => {
 
 describe("runDFS step.line", () => {
 	it("all step.line values are valid indices into DFS_PSEUDOCODE", () => {
-		let g = clearGraph()
-		let nA: string, nB: string
-		;({ graph: g, nodeId: nA } = addNode(g, 0, 0, 0))
-		;({ graph: g, nodeId: nB } = addNode(g, 100, 0, 1))
-		;({ graph: g } = addEdge(g, nA, nB)!)
+		const { graph: g2, ids } = buildNodes(2)
+		const { graph: g } = addEdge(g2, ids[0], ids[1])!
 
-		const result = runDFS(g, nA)
+		const result = runDFS(g, ids[0])
 		for (const step of result.steps) {
 			expect(step.line).toBeGreaterThanOrEqual(0)
 			expect(step.line).toBeLessThan(DFS_PSEUDOCODE.length)
