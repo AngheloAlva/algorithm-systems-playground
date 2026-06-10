@@ -30,6 +30,7 @@
 
 import { create } from "zustand"
 import { createGrid, placeStart, placeEnd, setWall, eraseCell, setWeight } from "../lib/grid/grid"
+import { cycleWeight } from "../lib/grid/cycle-weight"
 import { DEFAULT_ROWS, DEFAULT_COLS } from "../lib/grid/grid.types"
 import { ALGORITHM, ALGORITHM_REGISTRY } from "../lib/algorithms/pathfinding/index"
 import type { Algorithm } from "../lib/algorithms/pathfinding/index"
@@ -222,6 +223,9 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 		let nextGrid = grid
 		if (brush === BRUSH_MODE.ERASE) {
 			nextGrid = eraseCell(grid, row, col)
+		} else if (brush === BRUSH_MODE.WEIGHT) {
+			// Cycle weight [1→2→3→4→5→1] on each tap; no-op on walls/start/end
+			nextGrid = cycleWeight(grid, row, col)
 		} else {
 			// Default: WALL brush (set semantics)
 			nextGrid = setWall(grid, row, col)

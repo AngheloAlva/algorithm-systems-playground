@@ -23,7 +23,7 @@ import { ALGORITHM } from "../lib/algorithms/pathfinding/index"
 import { DEFAULT_SPEED } from "../lib/animation/speed-config"
 import { DEFAULT_ROWS, DEFAULT_COLS } from "../lib/grid/grid.types"
 import { CELL } from "../lib/grid/grid.types"
-import { coords } from "../lib/grid/grid"
+import { createGrid, placeStart, placeEnd, coords } from "../lib/grid/grid"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -708,6 +708,187 @@ describe("pathfindingStore — generateMaze", () => {
 		usePathfindingStore.getState().run()
 		usePathfindingStore.getState().generateMaze(42)
 		expect(usePathfindingStore.getState().result).toBeNull()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// paintCell — WEIGHT brush (PR4 task 5.1)
+// ---------------------------------------------------------------------------
+
+describe("pathfindingStore — paintCell WEIGHT brush (cycle weight)", () => {
+	beforeEach(resetStore)
+
+	it("WEIGHT brush: cycles weight from 1 to 2 on first tap", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WEIGHT)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		expect(emptyCellIndex).toBeGreaterThanOrEqual(0)
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(2)
+	})
+
+	it("WEIGHT brush: two taps cycle from 1 to 3", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WEIGHT)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(3)
+	})
+
+	it("WEIGHT brush: 5 taps wraps back to weight 1", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WEIGHT)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		for (let tap = 0; tap < 5; tap++) {
+			usePathfindingStore.getState().paintCell(r, c)
+		}
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(1)
+	})
+
+	it("WEIGHT brush: does NOT affect cell kind (stays EMPTY)", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WEIGHT)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.EMPTY)
+	})
+
+	it("WEIGHT brush: does NOT change weight on a wall cell", () => {
+		// First place a wall
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+
+		// Now switch to WEIGHT brush and tap the wall cell
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WEIGHT)
+		usePathfindingStore.getState().paintCell(r, c)
+
+		// Weight should still be 1 (no change)
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(1)
+	})
+
+	it("WEIGHT brush: triggers silent recompute when status is done", () => {
+		usePathfindingStore.getState().run()
+		if (usePathfindingStore.getState().status !== "done") return
+
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WEIGHT)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (i !== grid.start && i !== grid.end && grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		if (emptyCellIndex === -1) return
+		const resultBefore = usePathfindingStore.getState().result
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().result).not.toBe(resultBefore)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// Edge cases (PR4 task 5.5)
+// ---------------------------------------------------------------------------
+
+describe("pathfindingStore — edge case: no-path state", () => {
+	beforeEach(resetStore)
+
+	it("sets status to idle and result.metrics.reachable=false when no path exists", () => {
+		// Wall all neighbors of start to cut off all routes
+		const { grid } = usePathfindingStore.getState()
+		const startCoords = coords(grid.start, grid.cols)
+		for (let dr = -1; dr <= 1; dr++) {
+			for (let dc = -1; dc <= 1; dc++) {
+				if (dr === 0 && dc === 0) continue
+				const nr = startCoords.r + dr
+				const nc = startCoords.c + dc
+				if (nr >= 0 && nr < grid.rows && nc >= 0 && nc < grid.cols) {
+					const ni = nr * grid.cols + nc
+					if (grid.cells[ni] === CELL.EMPTY) {
+						usePathfindingStore.getState().paintCell(nr, nc)
+					}
+				}
+			}
+		}
+		usePathfindingStore.getState().run()
+		const state = usePathfindingStore.getState()
+		expect(state.status).toBe(RUN_STATUS.IDLE)
+		expect(state.result?.metrics.reachable).toBe(false)
+	})
+
+	it("metrics show 0 path length and 0 path cost when no path found", () => {
+		const { grid } = usePathfindingStore.getState()
+		const startCoords = coords(grid.start, grid.cols)
+		for (let dr = -1; dr <= 1; dr++) {
+			for (let dc = -1; dc <= 1; dc++) {
+				if (dr === 0 && dc === 0) continue
+				const nr = startCoords.r + dr
+				const nc = startCoords.c + dc
+				if (nr >= 0 && nr < grid.rows && nc >= 0 && nc < grid.cols) {
+					const ni = nr * grid.cols + nc
+					if (grid.cells[ni] === CELL.EMPTY) {
+						usePathfindingStore.getState().paintCell(nr, nc)
+					}
+				}
+			}
+		}
+		usePathfindingStore.getState().run()
+		const result = usePathfindingStore.getState().result
+		expect(result).not.toBeNull()
+		expect(result?.metrics.pathLength).toBe(0)
+		expect(result?.metrics.pathCost).toBe(0)
+	})
+})
+
+describe("pathfindingStore — edge case: very small grid (10x10)", () => {
+	it("run completes successfully on a 10x10 grid with clear path", () => {
+		let smallGrid = createGrid(10, 10)
+		smallGrid = placeStart(smallGrid, 0, 0)
+		smallGrid = placeEnd(smallGrid, 9, 9)
+		usePathfindingStore.setState({ grid: smallGrid, status: RUN_STATUS.IDLE, result: null, cursor: 0 })
+		usePathfindingStore.getState().run()
+		const state = usePathfindingStore.getState()
+		expect(state.status).toBe(RUN_STATUS.DONE)
+		expect(state.result?.metrics.reachable).toBe(true)
 	})
 })
 
