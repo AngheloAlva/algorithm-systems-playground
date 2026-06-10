@@ -109,6 +109,24 @@ describe("quickSort", () => {
 	})
 })
 
+describe("quickSort DONE step", () => {
+	it("DONE step pseudocodeLine points at a line whose text is '  return arr'", () => {
+		const result = quickSort([3, 1, 4, 1, 5])
+		const doneStep = result.steps.find((s) => s.kind === SORT_STEP_KIND.DONE)
+		expect(doneStep).toBeDefined()
+		const doneLine = quickSortPseudocode[doneStep!.pseudocodeLine]
+		expect(doneLine.text).toBe("  return arr")
+	})
+
+	it("DONE step pseudocodeLine id is less than the partition function header id", () => {
+		const result = quickSort([3, 1, 4, 1, 5])
+		const doneStep = result.steps.find((s) => s.kind === SORT_STEP_KIND.DONE)
+		expect(doneStep).toBeDefined()
+		const partitionHeaderIdx = quickSortPseudocode.findIndex((l) => l.text.startsWith("function partition"))
+		expect(doneStep!.pseudocodeLine).toBeLessThan(partitionHeaderIdx)
+	})
+})
+
 describe("quickSortPseudocode", () => {
 	it("is a non-empty PseudoLine array", () => {
 		expect(Array.isArray(quickSortPseudocode)).toBe(true)

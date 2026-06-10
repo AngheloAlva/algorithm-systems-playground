@@ -20,7 +20,13 @@ function replaySteps(input: ReadonlyArray<number>, result: ReturnType<typeof mer
 	for (const step of result.steps) {
 		if (step.kind === SORT_STEP_KIND.PLACE) {
 			const destIndex = step.indices[0]
-			arr[destIndex] = step.value!
+			if (step.value === undefined) {
+				throw new Error(
+					`Broken contract: PLACE step at index ${destIndex} is missing value. ` +
+						`Replay convention requires value to be defined for merge sort PLACE steps.`
+				)
+			}
+			arr[destIndex] = step.value
 		}
 	}
 	return arr
@@ -90,6 +96,24 @@ describe("mergeSort", () => {
 	it("metrics.swaps is 0 (merge sort does not swap)", () => {
 		const result = mergeSort([5, 3, 1, 4, 2])
 		expect(result.metrics.swaps).toBe(0)
+	})
+})
+
+describe("mergeSort DONE step", () => {
+	it("DONE step pseudocodeLine points at a line whose text is '  return arr'", () => {
+		const result = mergeSort([5, 3, 1, 4, 2])
+		const doneStep = result.steps.find((s) => s.kind === SORT_STEP_KIND.DONE)
+		expect(doneStep).toBeDefined()
+		const doneLine = mergeSortPseudocode[doneStep!.pseudocodeLine]
+		expect(doneLine.text).toBe("  return arr")
+	})
+
+	it("DONE step pseudocodeLine id is less than the merge function header id", () => {
+		const result = mergeSort([5, 3, 1, 4, 2])
+		const doneStep = result.steps.find((s) => s.kind === SORT_STEP_KIND.DONE)
+		expect(doneStep).toBeDefined()
+		const mergeHeaderIdx = mergeSortPseudocode.findIndex((l) => l.text.startsWith("function merge("))
+		expect(doneStep!.pseudocodeLine).toBeLessThan(mergeHeaderIdx)
 	})
 })
 

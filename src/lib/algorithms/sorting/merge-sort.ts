@@ -31,17 +31,17 @@ export const mergeSortPseudocode: PseudoLine[] = [
 	{ id: 3, text: "  mergeSort(arr, left, mid)" },
 	{ id: 4, text: "  mergeSort(arr, mid+1, right)" },
 	{ id: 5, text: "  merge(arr, left, mid, right)" },
-	{ id: 6, text: "function merge(arr, left, mid, right):" },
-	{ id: 7, text: "  leftPart ← arr[left..mid]" },
-	{ id: 8, text: "  rightPart ← arr[mid+1..right]" },
-	{ id: 9, text: "  i ← 0; j ← 0; k ← left" },
-	{ id: 10, text: "  while i < len(left) and j < len(right):" },
-	{ id: 11, text: "    if leftPart[i] <= rightPart[j]:" },
-	{ id: 12, text: "      arr[k] ← leftPart[i]; i ← i+1" },
-	{ id: 13, text: "    else: arr[k] ← rightPart[j]; j ← j+1" },
-	{ id: 14, text: "    k ← k+1" },
-	{ id: 15, text: "  copy remaining elements" },
-	{ id: 16, text: "  return arr" },
+	{ id: 6, text: "  return arr" },
+	{ id: 7, text: "function merge(arr, left, mid, right):" },
+	{ id: 8, text: "  leftPart ← arr[left..mid]" },
+	{ id: 9, text: "  rightPart ← arr[mid+1..right]" },
+	{ id: 10, text: "  i ← 0; j ← 0; k ← left" },
+	{ id: 11, text: "  while i < len(left) and j < len(right):" },
+	{ id: 12, text: "    if leftPart[i] <= rightPart[j]:" },
+	{ id: 13, text: "      arr[k] ← leftPart[i]; i ← i+1" },
+	{ id: 14, text: "    else: arr[k] ← rightPart[j]; j ← j+1" },
+	{ id: 15, text: "    k ← k+1" },
+	{ id: 16, text: "  copy remaining elements" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -65,16 +65,16 @@ function mergeParts(
 
 	while (i < leftPart.length && j < rightPart.length) {
 		// COMPARE — leftPart[i] vs rightPart[j]
-		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [left + i, mid + 1 + j], pseudocodeLine: 11 })
+		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [left + i, mid + 1 + j], pseudocodeLine: 12 })
 		metrics.comparisons++
 
 		if (leftPart[i] <= rightPart[j]) {
 			working[k] = leftPart[i]
-			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: leftPart[i], pseudocodeLine: 12 })
+			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: leftPart[i], pseudocodeLine: 13 })
 			i++
 		} else {
 			working[k] = rightPart[j]
-			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: rightPart[j], pseudocodeLine: 13 })
+			steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: rightPart[j], pseudocodeLine: 14 })
 			j++
 		}
 		k++
@@ -83,7 +83,7 @@ function mergeParts(
 	// Copy remaining left elements
 	while (i < leftPart.length) {
 		working[k] = leftPart[i]
-		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: leftPart[i], pseudocodeLine: 15 })
+		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: leftPart[i], pseudocodeLine: 16 })
 		i++
 		k++
 	}
@@ -91,7 +91,7 @@ function mergeParts(
 	// Copy remaining right elements
 	while (j < rightPart.length) {
 		working[k] = rightPart[j]
-		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: rightPart[j], pseudocodeLine: 15 })
+		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [k], value: rightPart[j], pseudocodeLine: 16 })
 		j++
 		k++
 	}
@@ -142,7 +142,7 @@ export function mergeSort(arr: ReadonlyArray<number>): SortTraceResult {
 		mergeSortRecursive(working, 0, n - 1, steps, metrics)
 	}
 
-	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 16 })
+	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 6 })
 
 	return {
 		steps,

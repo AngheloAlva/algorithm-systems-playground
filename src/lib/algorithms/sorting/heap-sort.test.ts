@@ -92,6 +92,24 @@ describe("heapSort", () => {
 	})
 })
 
+describe("heapSort DONE step", () => {
+	it("DONE step pseudocodeLine points at a line whose text is '  return arr'", () => {
+		const result = heapSort([5, 3, 1, 4, 2])
+		const doneStep = result.steps.find((s) => s.kind === SORT_STEP_KIND.DONE)
+		expect(doneStep).toBeDefined()
+		const doneLine = heapSortPseudocode[doneStep!.pseudocodeLine]
+		expect(doneLine.text).toBe("  return arr")
+	})
+
+	it("DONE step pseudocodeLine id is less than the heapify function header id", () => {
+		const result = heapSort([5, 3, 1, 4, 2])
+		const doneStep = result.steps.find((s) => s.kind === SORT_STEP_KIND.DONE)
+		expect(doneStep).toBeDefined()
+		const heapifyHeaderIdx = heapSortPseudocode.findIndex((l) => l.text.startsWith("function heapify"))
+		expect(doneStep!.pseudocodeLine).toBeLessThan(heapifyHeaderIdx)
+	})
+})
+
 describe("heapSortPseudocode", () => {
 	it("is a non-empty PseudoLine array", () => {
 		expect(Array.isArray(heapSortPseudocode)).toBe(true)

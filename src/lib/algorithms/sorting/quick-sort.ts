@@ -29,16 +29,16 @@ export const quickSortPseudocode: PseudoLine[] = [
 	{ id: 2, text: "  pivotIndex ← partition(arr, low, high)" },
 	{ id: 3, text: "  quickSort(arr, low, pivotIndex - 1)" },
 	{ id: 4, text: "  quickSort(arr, pivotIndex + 1, high)" },
-	{ id: 5, text: "function partition(arr, low, high):" },
-	{ id: 6, text: "  pivot ← arr[high]" },
-	{ id: 7, text: "  i ← low - 1" },
-	{ id: 8, text: "  for j from low to high-1:" },
-	{ id: 9, text: "    if arr[j] <= pivot:" },
-	{ id: 10, text: "      i ← i + 1" },
-	{ id: 11, text: "      swap(arr[i], arr[j])" },
-	{ id: 12, text: "  swap(arr[i+1], arr[high])  // place pivot" },
-	{ id: 13, text: "  return i + 1" },
-	{ id: 14, text: "  return arr" },
+	{ id: 5, text: "  return arr" },
+	{ id: 6, text: "function partition(arr, low, high):" },
+	{ id: 7, text: "  pivot ← arr[high]" },
+	{ id: 8, text: "  i ← low - 1" },
+	{ id: 9, text: "  for j from low to high-1:" },
+	{ id: 10, text: "    if arr[j] <= pivot:" },
+	{ id: 11, text: "      i ← i + 1" },
+	{ id: 12, text: "      swap(arr[i], arr[j])" },
+	{ id: 13, text: "  swap(arr[i+1], arr[high])  // place pivot" },
+	{ id: 14, text: "  return i + 1" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -57,14 +57,14 @@ function lomutoPartition(
 
 	for (let j = low; j < high; j++) {
 		// COMPARE — current element vs pivot
-		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [j, high], pseudocodeLine: 9 })
+		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [j, high], pseudocodeLine: 10 })
 		metrics.comparisons++
 
 		if (working[j] <= pivot) {
 			i++
 			if (i !== j) {
 				;[working[i], working[j]] = [working[j], working[i]]
-				steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [i, j], pseudocodeLine: 11 })
+				steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [i, j], pseudocodeLine: 12 })
 				metrics.swaps++
 			}
 		}
@@ -74,10 +74,10 @@ function lomutoPartition(
 	const pivotPos = i + 1
 	if (pivotPos !== high) {
 		;[working[pivotPos], working[high]] = [working[high], working[pivotPos]]
-		steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [pivotPos, high], pseudocodeLine: 12 })
+		steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [pivotPos, high], pseudocodeLine: 13 })
 		metrics.swaps++
 	}
-	steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [pivotPos], pseudocodeLine: 12 })
+	steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [pivotPos], pseudocodeLine: 13 })
 
 	return pivotPos
 }
@@ -123,7 +123,7 @@ export function quickSort(arr: ReadonlyArray<number>): SortTraceResult {
 	const working = [...arr]
 	quickSortRecursive(working, 0, n - 1, steps, metrics)
 
-	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 14 })
+	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 5 })
 
 	return {
 		steps,

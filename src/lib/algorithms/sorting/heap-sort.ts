@@ -33,17 +33,17 @@ export const heapSortPseudocode: PseudoLine[] = [
 	{ id: 6, text: "  for i from n-1 down to 1:" },
 	{ id: 7, text: "    swap(arr[0], arr[i])" },
 	{ id: 8, text: "    heapify(arr, i, 0)" },
-	{ id: 9, text: "function heapify(arr, n, i):" },
-	{ id: 10, text: "  largest ← i" },
-	{ id: 11, text: "  left ← 2*i + 1; right ← 2*i + 2" },
-	{ id: 12, text: "  if left < n and arr[left] > arr[largest]:" },
-	{ id: 13, text: "    largest ← left" },
-	{ id: 14, text: "  if right < n and arr[right] > arr[largest]:" },
-	{ id: 15, text: "    largest ← right" },
-	{ id: 16, text: "  if largest != i:" },
-	{ id: 17, text: "    swap(arr[i], arr[largest])" },
-	{ id: 18, text: "    heapify(arr, n, largest)" },
-	{ id: 19, text: "  return arr" },
+	{ id: 9, text: "  return arr" },
+	{ id: 10, text: "function heapify(arr, n, i):" },
+	{ id: 11, text: "  largest ← i" },
+	{ id: 12, text: "  left ← 2*i + 1; right ← 2*i + 2" },
+	{ id: 13, text: "  if left < n and arr[left] > arr[largest]:" },
+	{ id: 14, text: "    largest ← left" },
+	{ id: 15, text: "  if right < n and arr[right] > arr[largest]:" },
+	{ id: 16, text: "    largest ← right" },
+	{ id: 17, text: "  if largest != i:" },
+	{ id: 18, text: "    swap(arr[i], arr[largest])" },
+	{ id: 19, text: "    heapify(arr, n, largest)" },
 ]
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ function heapify(
 
 	if (left < heapSize) {
 		// COMPARE — arr[left] vs arr[largest]
-		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [left, largest], pseudocodeLine: 12 })
+		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [left, largest], pseudocodeLine: 13 })
 		metrics.comparisons++
 		if (working[left] > working[largest]) {
 			largest = left
@@ -72,7 +72,7 @@ function heapify(
 
 	if (right < heapSize) {
 		// COMPARE — arr[right] vs arr[largest]
-		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [right, largest], pseudocodeLine: 14 })
+		steps.push({ kind: SORT_STEP_KIND.COMPARE, indices: [right, largest], pseudocodeLine: 15 })
 		metrics.comparisons++
 		if (working[right] > working[largest]) {
 			largest = right
@@ -81,7 +81,7 @@ function heapify(
 
 	if (largest !== rootIdx) {
 		;[working[rootIdx], working[largest]] = [working[largest], working[rootIdx]]
-		steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [rootIdx, largest], pseudocodeLine: 17 })
+		steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [rootIdx, largest], pseudocodeLine: 18 })
 		metrics.swaps++
 		// Recursively heapify the affected sub-tree
 		heapify(working, heapSize, largest, steps, metrics)
@@ -123,7 +123,7 @@ export function heapSort(arr: ReadonlyArray<number>): SortTraceResult {
 		heapify(working, i, 0, steps, metrics)
 	}
 
-	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 19 })
+	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 9 })
 
 	return {
 		steps,

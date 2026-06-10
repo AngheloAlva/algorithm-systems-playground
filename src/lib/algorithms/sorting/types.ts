@@ -54,8 +54,10 @@ export interface SortStep {
 	/** 0-indexed line in the algorithm's own pseudocode array. */
 	pseudocodeLine: number
 	/**
-	 * Element value being written; present only on PLACE steps that write a value,
-	 * e.g. merge sort's write-replay. Replay convention: arr[indices[0]] = value.
+	 * Element value being written; present only on PLACE steps that carry a value,
+	 * e.g. merge sort's write-replay. Replay convention: when `value !== undefined`,
+	 * write `arr[indices[0]] = value`. PLACE steps without `value` (e.g. quick sort's
+	 * pivot-position marker) carry no element value and require no write during replay.
 	 */
 	value?: number
 }
