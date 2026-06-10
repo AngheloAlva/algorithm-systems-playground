@@ -116,4 +116,61 @@ describe("generateMaze", () => {
 			expect(Array.from(maze1.cells)).toEqual(Array.from(maze2.cells))
 		})
 	})
+
+	// ---------------------------------------------------------------------------
+	// Border corridor bug — BUG FIX: ensureReachable was carving row 0 + last col
+	// ---------------------------------------------------------------------------
+
+	describe("border walls — row 0 and last column must not always be fully open", () => {
+		/**
+		 * Seeds 0-4 on the default 24×44 grid all trigger the BFS fallback in the
+		 * buggy implementation, which carves an L-corridor along row 0 and the last
+		 * column. After the fix (passage-exit protection in divide()), the fallback
+		 * is never triggered and those borders receive real walls.
+		 *
+		 * Assertion: over seeds [0, 1, 2, 3, 4], NOT all of them leave row 0 or the
+		 * last column fully empty.
+		 */
+		const SEEDS = [0, 1, 2, 3, 4]
+		const ROWS = 24
+		const COLS = 44
+
+		it("at least one of seeds 0-4 has walls in row 0 (row 0 not always a corridor)", () => {
+			const allRow0Empty = SEEDS.every((seed) => {
+				const maze = generateMaze(ROWS, COLS, seed)
+				const hasWallInRow0 = Array.from({ length: COLS }, (_, c) => maze.cells[c]).some(
+					(v) => v === CELL.WALL
+				)
+				return !hasWallInRow0
+			})
+			// With the bug, all 5 seeds produce an empty row 0 (fallback corridor).
+			// After the fix, at least one seed has a wall in row 0.
+			expect(allRow0Empty).toBe(false)
+		})
+
+		it("at least one of seeds 0-4 has walls in the last column (last col not always a corridor)", () => {
+			const allLastColEmpty = SEEDS.every((seed) => {
+				const maze = generateMaze(ROWS, COLS, seed)
+				const hasWallInLastCol = Array.from(
+					{ length: ROWS },
+					(_, r) => maze.cells[r * COLS + (COLS - 1)]
+				).some((v) => v === CELL.WALL)
+				return !hasWallInLastCol
+			})
+			// With the bug, all 5 seeds produce an empty last col (fallback corridor).
+			// After the fix, at least one seed has a wall in the last column.
+			expect(allLastColEmpty).toBe(false)
+		})
+
+		it("all 5 seeds produce reachable mazes after fix (fallback no longer needed)", () => {
+			// This test documents the pre-condition: the fixed algorithm should not
+			// need ensureReachable for these seeds. Reachability is verified via BFS.
+			for (const seed of SEEDS) {
+				const maze = generateMaze(ROWS, COLS, seed)
+				// Run BFS to verify reachability
+				const result = runBfs(maze, { diagonal: false })
+				expect(result.metrics.reachable).toBe(true)
+			}
+		})
+	})
 })

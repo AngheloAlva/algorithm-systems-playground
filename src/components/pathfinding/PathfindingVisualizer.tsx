@@ -169,6 +169,12 @@ export function PathfindingVisualizer() {
 	const rafPendingRef = useRef<number | null>(null)
 	const pendingActionRef = useRef<(() => void) | null>(null)
 
+	// Tracks the last cell index painted during the current drag stroke.
+	// Reset on pointerdown/pointerup/pointerleave. Guards against the rAF loop
+	// re-dispatching paintCell for the same cell while the pointer is stationary
+	// within a cell — which caused wall toggle flicker.
+	const lastPaintedCellRef = useRef<number | null>(null)
+
 	/** Enqueue a store mutation for the next animation frame (coalesces drag). */
 	const scheduleAction = useCallback((action: () => void) => {
 		pendingActionRef.current = action
@@ -189,6 +195,8 @@ export function PathfindingVisualizer() {
 		}
 		pendingActionRef.current?.()
 		pendingActionRef.current = null
+		// Reset cell dedupe so the next drag stroke starts fresh
+		lastPaintedCellRef.current = null
 	}, [])
 
 	// Cleanup rAF on unmount
@@ -210,6 +218,9 @@ export function PathfindingVisualizer() {
 			if (row < 0 || col < 0 || row >= rows || col >= cols) return
 
 			if (brush === BRUSH_MODE.WALL || brush === BRUSH_MODE.ERASE) {
+				// Dedupe: skip if the pointer is still within the same cell
+				if (lastPaintedCellRef.current === cellIndex) return
+				lastPaintedCellRef.current = cellIndex
 				scheduleAction(() => paintCell(row, col))
 			}
 		},
