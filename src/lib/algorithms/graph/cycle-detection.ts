@@ -7,10 +7,12 @@
  * - Directed graphs: a back-edge is an edge (u, v) where v is on the current
  *   DFS recursion stack (the "gray"/on-stack set). An edge to a fully-finished
  *   ("black") node is a cross/forward edge, NOT a cycle.
- * - Undirected graphs: a back-edge is an edge (u, v) where v is already visited
- *   AND v is NOT the immediate parent of u in the DFS tree. No parallel edges
- *   or self-loops are possible (enforced by GraphData invariants), so the
- *   immediate-parent check is sufficient.
+ * - Undirected graphs: a back-edge is an edge (u, v) where v is still on the
+ *   DFS recursion stack AND v is NOT reached via the immediate parent edge.
+ *   Both conditions are required: the on-stack check excludes already-finished
+ *   descendants (which would otherwise double-count each cycle), and the
+ *   parent-edge check excludes the edge we just arrived through (the parent IS
+ *   on the stack). No parallel edges or self-loops exist (GraphData invariant).
  *
  * Emits (per DFS tree traversal order):
  *   { kind: "visit", nodeId, line }     — first entry into a node
@@ -42,7 +44,7 @@ export const CYCLE_DETECTION_PSEUDOCODE = [
 	"      dfs(neighbor, parent=node)",             // 9
 	"    elif neighbor is on stack (directed):",    // 10
 	"      emit back-edge(node, neighbor)",         // 11
-	"    elif neighbor != parent (undirected):",    // 12
+	"    elif neighbor on stack and != parent (undir.):", // 12
 	"      emit back-edge(node, neighbor)",         // 13
 ] as const
 
