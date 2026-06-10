@@ -128,20 +128,6 @@ export interface GraphState {
 	handleCanvasPointerMove: (x: number, y: number) => void
 	handleCanvasPointerUp: (x: number, y: number) => void
 
-	// -- For test/reset purposes (returns the data slice of initial state) --
-	getInitialState: () => {
-		algorithm: GraphAlgorithm
-		speed: number
-		graph: GraphData
-		labelSeq: number
-		editMode: EditMode
-		interaction: Interaction
-		selection: Selection
-		startId: string | null
-		status: RunStatus
-		cursor: number
-		result: GraphTraceResult | null
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -174,8 +160,16 @@ function silentRecompute(
 ): void {
 	const { status, graph, algorithm, startId } = get()
 
-	// Only recompute if we were previously running/done (not idle)
+	// No-op when idle — nothing to recompute
 	if (status === RUN_STATUS.IDLE) return
+
+	// During active playback (RUNNING or PAUSED), a topology edit would cause
+	// split-brain: the store result and the player cursor would be out of sync.
+	// Reset to IDLE so the user must explicitly re-run. (ADR-3, FIX 9)
+	if (status === RUN_STATUS.RUNNING || status === RUN_STATUS.PAUSED) {
+		set({ status: RUN_STATUS.IDLE, result: null, cursor: 0 })
+		return
+	}
 
 	const entry = GRAPH_ALGORITHM_REGISTRY[algorithm]
 	if (!entry) return
@@ -203,8 +197,6 @@ function silentRecompute(
 export const useGraphStore = create<GraphState>()((set, get) => ({
 	...INITIAL_VALUES,
 
-	getInitialState: () => ({ ...INITIAL_VALUES }),
-
 	// ---------------------------------------------------------------------------
 	// Config
 	// ---------------------------------------------------------------------------
@@ -224,16 +216,13 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
 	// ---------------------------------------------------------------------------
 
 	setEditMode(mode) {
-		const updates: Partial<GraphState> = {
+		// Always clear interaction on mode switch — no in-progress gesture state
+		// should survive a mode change, regardless of which mode we're leaving.
+		set({
 			editMode: mode,
 			selection: null,
-		}
-		// Clear interaction when leaving ADD_EDGE or MOVE_NODE
-		const current = get().editMode
-		if (current === EDIT_MODE.ADD_EDGE || current === EDIT_MODE.MOVE_NODE) {
-			updates.interaction = { kind: "none" }
-		}
-		set(updates)
+			interaction: { kind: "none" },
+		})
 	},
 
 	setStart(nodeId) {
@@ -262,12 +251,16 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
 	},
 
 	removeNode(nodeId) {
-		const { graph, startId } = get()
+		const { graph, startId, selection } = get()
 		const newGraph = libRemoveNode(graph, nodeId)
 		const updates: Partial<GraphState> = { graph: newGraph }
 		// If the deleted node was the start node, clear startId
 		if (startId === nodeId) {
 			updates.startId = null
+		}
+		// Clear selection if it referenced the deleted node
+		if (selection?.kind === "node" && selection.id === nodeId) {
+			updates.selection = null
 		}
 		set(updates)
 		silentRecompute(get, set)
@@ -282,9 +275,14 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
 	},
 
 	removeEdge(edgeId) {
-		const { graph } = get()
+		const { graph, selection } = get()
 		const newGraph = libRemoveEdge(graph, edgeId)
-		set({ graph: newGraph })
+		const updates: Partial<GraphState> = { graph: newGraph }
+		// Clear selection if it referenced the deleted edge
+		if (selection?.kind === "edge" && selection.id === edgeId) {
+			updates.selection = null
+		}
+		set(updates)
 		silentRecompute(get, set)
 	},
 

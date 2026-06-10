@@ -83,10 +83,10 @@ export type VisitStep = { kind: "visit"; nodeId: string; line: number }
 export type FrontierStep = { kind: "frontier"; nodeId: string; line: number }
 
 /** DFS tree edge traversal. */
-export type TreeEdgeStep = { kind: "tree-edge"; fromId: string; toId: string; line: number }
+export type TreeEdgeStep = { kind: "tree-edge"; fromId: string; toId: string; edgeId: string; line: number }
 
 /** DFS back-edge (cycle found). */
-export type BackEdgeStep = { kind: "back-edge"; fromId: string; toId: string; line: number }
+export type BackEdgeStep = { kind: "back-edge"; fromId: string; toId: string; edgeId: string; line: number }
 
 /** MST edge included. */
 export type MstIncludeStep = { kind: "mst-include"; edgeId: string; line: number }

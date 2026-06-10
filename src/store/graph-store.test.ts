@@ -25,7 +25,7 @@ import { act } from "@testing-library/react"
 
 /** Reset store to initial state before each test. */
 function resetStore() {
-	useGraphStore.setState(useGraphStore.getInitialState())
+	useGraphStore.setState(useGraphStore.getInitialState(), true)
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +324,174 @@ describe("graph-store — clearAll action", () => {
 		expect(state.startId).toBeNull()
 		expect(state.status).toBe(RUN_STATUS.IDLE)
 		expect(state.result).toBeNull()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// A10.9 — FIX 2: selection cleared on delete
+// ---------------------------------------------------------------------------
+
+describe("graph-store — FIX 2: selection cleared when selected item is deleted", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("clears selection when the selected node is removed", () => {
+		act(() => {
+			useGraphStore.getState().addNodeAt(100, 100)
+		})
+		const nodeId = [...useGraphStore.getState().graph.nodes.keys()][0]
+		act(() => {
+			useGraphStore.getState().setSelection({ kind: "node", id: nodeId })
+		})
+		expect(useGraphStore.getState().selection).toEqual({ kind: "node", id: nodeId })
+
+		act(() => {
+			useGraphStore.getState().removeNode(nodeId)
+		})
+		expect(useGraphStore.getState().selection).toBeNull()
+	})
+
+	it("clears selection when the selected edge is removed", () => {
+		act(() => {
+			useGraphStore.getState().addNodeAt(100, 100)
+			useGraphStore.getState().addNodeAt(200, 200)
+		})
+		const nodeIds = [...useGraphStore.getState().graph.nodes.keys()]
+		act(() => {
+			useGraphStore.getState().addEdgeBetween(nodeIds[0], nodeIds[1])
+		})
+		const edgeId = [...useGraphStore.getState().graph.edges.keys()][0]
+		act(() => {
+			useGraphStore.getState().setSelection({ kind: "edge", id: edgeId })
+		})
+		expect(useGraphStore.getState().selection).toEqual({ kind: "edge", id: edgeId })
+
+		act(() => {
+			useGraphStore.getState().removeEdge(edgeId)
+		})
+		expect(useGraphStore.getState().selection).toBeNull()
+	})
+
+	it("does NOT clear selection when a different node is removed", () => {
+		act(() => {
+			useGraphStore.getState().addNodeAt(100, 100)
+			useGraphStore.getState().addNodeAt(200, 200)
+		})
+		const nodeIds = [...useGraphStore.getState().graph.nodes.keys()]
+		act(() => {
+			useGraphStore.getState().setSelection({ kind: "node", id: nodeIds[0] })
+		})
+		act(() => {
+			useGraphStore.getState().removeNode(nodeIds[1])
+		})
+		expect(useGraphStore.getState().selection).toEqual({ kind: "node", id: nodeIds[0] })
+	})
+})
+
+// ---------------------------------------------------------------------------
+// A10.10 — FIX 6: setEditMode always clears interaction
+// ---------------------------------------------------------------------------
+
+describe("graph-store — FIX 6: setEditMode always clears interaction", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("clears interaction when switching from ADD_NODE (not just ADD_EDGE/MOVE_NODE)", () => {
+		act(() => {
+			useGraphStore.setState({
+				editMode: EDIT_MODE.ADD_NODE,
+				interaction: { kind: "linking", sourceId: "n1", x: 0, y: 0 },
+			})
+		})
+		act(() => {
+			useGraphStore.getState().setEditMode(EDIT_MODE.SELECT)
+		})
+		expect(useGraphStore.getState().interaction).toEqual({ kind: "none" })
+	})
+
+	it("clears interaction when switching between any modes", () => {
+		act(() => {
+			useGraphStore.setState({
+				editMode: EDIT_MODE.DELETE,
+				interaction: { kind: "moving", nodeId: "n1" },
+			})
+		})
+		act(() => {
+			useGraphStore.getState().setEditMode(EDIT_MODE.ADD_EDGE)
+		})
+		expect(useGraphStore.getState().interaction).toEqual({ kind: "none" })
+	})
+})
+
+// ---------------------------------------------------------------------------
+// A10.11 — FIX 9: topology edit during RUNNING resets to IDLE
+// ---------------------------------------------------------------------------
+
+describe("graph-store — FIX 9: topology edit during RUNNING resets state", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("addNodeAt during RUNNING sets status=IDLE and result=null", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		const firstNodeId = [...useGraphStore.getState().graph.nodes.keys()][0]
+		act(() => {
+			useGraphStore.setState({ startId: firstNodeId })
+			useGraphStore.getState().run()
+		})
+		// Manually set RUNNING to simulate active playback
+		act(() => {
+			useGraphStore.setState({ status: RUN_STATUS.RUNNING })
+		})
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.RUNNING)
+		expect(useGraphStore.getState().result).not.toBeNull()
+
+		act(() => {
+			useGraphStore.getState().addNodeAt(400, 400)
+		})
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.IDLE)
+		expect(useGraphStore.getState().result).toBeNull()
+	})
+
+	it("removeNode during RUNNING sets status=IDLE and result=null", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		const nodeIds = [...useGraphStore.getState().graph.nodes.keys()]
+		act(() => {
+			useGraphStore.setState({ startId: nodeIds[0], status: RUN_STATUS.RUNNING, result: { steps: [], metrics: { visitedCount: 0, traversalOrder: [] } } })
+		})
+		act(() => {
+			useGraphStore.getState().removeNode(nodeIds[1])
+		})
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.IDLE)
+		expect(useGraphStore.getState().result).toBeNull()
+	})
+
+	it("topology edit during PAUSED also resets to IDLE", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		act(() => {
+			useGraphStore.setState({ status: RUN_STATUS.PAUSED, result: { steps: [], metrics: { visitedCount: 0, traversalOrder: [] } } })
+		})
+		act(() => {
+			useGraphStore.getState().addNodeAt(400, 400)
+		})
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.IDLE)
+		expect(useGraphStore.getState().result).toBeNull()
+	})
+
+	it("topology edit during IDLE does not change IDLE status", () => {
+		act(() => {
+			useGraphStore.getState().addNodeAt(100, 100)
+		})
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.IDLE)
+		expect(useGraphStore.getState().result).toBeNull()
 	})
 })
 
