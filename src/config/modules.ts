@@ -54,7 +54,7 @@ export const MODULES: Module[] = [
     title: "Graphs",
     description:
       "Explore graph traversal, shortest paths, and connectivity algorithms.",
-    status: MODULE_STATUS.COMING_SOON,
+    status: MODULE_STATUS.AVAILABLE,
     icon: NetworkIcon,
   },
   {

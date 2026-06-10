@@ -63,10 +63,20 @@ describe("MODULES registry", () => {
     expect(pathfinding?.status).toBe(MODULE_STATUS.AVAILABLE);
   });
 
-  it("remaining 3 modules are coming-soon", () => {
+  it("graphs and pathfinding modules are available", () => {
+    const available = MODULES.filter(
+      (m) => m.status === MODULE_STATUS.AVAILABLE
+    );
+    const availableSlugs = available.map((m) => m.slug)
+    expect(availableSlugs).toContain("pathfinding");
+    expect(availableSlugs).toContain("graphs");
+  });
+
+  it("remaining modules are coming-soon", () => {
     const comingSoon = MODULES.filter(
       (m) => m.status === MODULE_STATUS.COMING_SOON
     );
-    expect(comingSoon).toHaveLength(3);
+    // simulation + dashboard remain coming-soon
+    expect(comingSoon).toHaveLength(2);
   });
 });
