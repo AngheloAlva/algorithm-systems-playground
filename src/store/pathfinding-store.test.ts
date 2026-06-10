@@ -880,6 +880,8 @@ describe("pathfindingStore — edge case: no-path state", () => {
 })
 
 describe("pathfindingStore — edge case: very small grid (10x10)", () => {
+	beforeEach(resetStore)
+
 	it("run completes successfully on a 10x10 grid with clear path", () => {
 		let smallGrid = createGrid(10, 10)
 		smallGrid = placeStart(smallGrid, 0, 0)

@@ -474,22 +474,58 @@ export function PathfindingCanvas({
 					announceCell(keyCursorRef.current.row, nextCol)
 					break
 				}
-				case " ":
+				case " ": {
 					e.preventDefault()
 					// Read from ref — always reflects the most recent arrow move even if
 					// the state update has not propagated yet (FIX 1 stale closure).
-					onCellClick?.(cellIndex(keyCursorRef.current.row, keyCursorRef.current.col, cols))
-					announceCell(keyCursorRef.current.row, keyCursorRef.current.col)
+					const spaceRow = keyCursorRef.current.row
+					const spaceCol = keyCursorRef.current.col
+					const spaceIdx = cellIndex(spaceRow, spaceCol, cols)
+					onCellClick?.(spaceIdx)
+					// Announce POST-edit state: Space toggles wall on empty, removes wall
+					// on wall cells. Start/end cells are unaffected (no-op in store).
+					const spaceCurrentKind = grid.cells[spaceIdx]
+					let spaceDesc: string
+					if (spaceIdx === grid.start) {
+						spaceDesc = "start"
+					} else if (spaceIdx === grid.end) {
+						spaceDesc = "end"
+					} else if (spaceCurrentKind === CELL.WALL) {
+						// Wall → empty after toggle
+						spaceDesc = "empty"
+					} else {
+						// Empty/weight → wall after toggle
+						spaceDesc = "wall"
+					}
+					setLiveRegionText(`Row ${spaceRow + 1}, column ${spaceCol + 1}: ${spaceDesc}`)
 					break
+				}
 				case "w":
-				case "W":
+				case "W": {
 					e.preventDefault()
 					// Read from ref — same stale-closure fix as Space (FIX 1).
-					onWeightCycle?.(
-						cellIndex(keyCursorRef.current.row, keyCursorRef.current.col, cols)
-					)
-					announceCell(keyCursorRef.current.row, keyCursorRef.current.col)
+					const wRow = keyCursorRef.current.row
+					const wCol = keyCursorRef.current.col
+					const wIdx = cellIndex(wRow, wCol, cols)
+					onWeightCycle?.(wIdx)
+					// Announce POST-edit state: W cycles weight [1→2→3→4→5→1].
+					// Walls are unaffected by weight cycling.
+					const wCurrentKind = grid.cells[wIdx]
+					let wDesc: string
+					if (wIdx === grid.start) {
+						wDesc = "start"
+					} else if (wIdx === grid.end) {
+						wDesc = "end"
+					} else if (wCurrentKind === CELL.WALL) {
+						wDesc = "wall"
+					} else {
+						const currentWeight = grid.weights[wIdx]
+						const nextWeight = currentWeight >= 5 ? 1 : currentWeight + 1
+						wDesc = nextWeight > 1 ? `weight ${nextWeight}` : "empty"
+					}
+					setLiveRegionText(`Row ${wRow + 1}, column ${wCol + 1}: ${wDesc}`)
 					break
+				}
 				default:
 					break
 			}
@@ -505,23 +541,13 @@ export function PathfindingCanvas({
 	const canvasHeight = grid.rows * cellSize
 
 	return (
-		<div
-			ref={containerRef}
-			role="application"
-			aria-label={`Pathfinding grid — ${grid.rows} rows × ${grid.cols} columns. Use arrow keys to move cursor, Space to toggle wall, W to cycle weight.`}
-			tabIndex={0}
-			className={className}
-			style={{ position: "relative", width: canvasWidth, height: canvasHeight }}
-			data-has-focus={hasFocus ? "true" : "false"}
-			onFocus={() => setHasFocus(true)}
-			onBlur={() => setHasFocus(false)}
-			onPointerDown={handlePointerDown}
-			onPointerMove={handlePointerMove}
-			onPointerUp={handlePointerUp}
-			onPointerLeave={handlePointerUp}
-			onKeyDown={handleKeyDown}
-		>
-			{/* FIX 5: visually-hidden live region for screen-reader announcements */}
+		<>
+			{/*
+			 * FIX 3: live region rendered as a sibling of role="application", NOT a
+			 * descendant. NVDA+Firefox (the most common AT combo) suppresses live
+			 * regions inside application mode, so placing it outside is required for
+			 * reliable announcements. Keyboard handling remains on the application div.
+			 */}
 			<span
 				aria-live="polite"
 				aria-atomic="true"
@@ -529,8 +555,25 @@ export function PathfindingCanvas({
 			>
 				{liveRegionText}
 			</span>
-			<CanvasLayer draw={drawStatic} aria-hidden="true" />
-			<CanvasLayer draw={drawDynamic} aria-hidden="true" />
-		</div>
+			<div
+				ref={containerRef}
+				role="application"
+				aria-label={`Pathfinding grid — ${grid.rows} rows × ${grid.cols} columns. Use arrow keys to move cursor, Space to toggle wall, W to cycle weight.`}
+				tabIndex={0}
+				className={className}
+				style={{ position: "relative", width: canvasWidth, height: canvasHeight }}
+				data-has-focus={hasFocus ? "true" : "false"}
+				onFocus={() => setHasFocus(true)}
+				onBlur={() => setHasFocus(false)}
+				onPointerDown={handlePointerDown}
+				onPointerMove={handlePointerMove}
+				onPointerUp={handlePointerUp}
+				onPointerLeave={handlePointerUp}
+				onKeyDown={handleKeyDown}
+			>
+				<CanvasLayer draw={drawStatic} aria-hidden="true" />
+				<CanvasLayer draw={drawDynamic} aria-hidden="true" />
+			</div>
+		</>
 	)
 }

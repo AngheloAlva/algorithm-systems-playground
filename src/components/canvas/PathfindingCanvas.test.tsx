@@ -92,10 +92,12 @@ const NO_TRACE: Step[] = []
 describe("PathfindingCanvas — accessibility attributes", () => {
 	it("container is focusable (tabIndex=0)", () => {
 		const grid = makeGrid()
-		const { container } = render(
+		const { getByRole } = render(
 			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
 		)
-		const div = container.firstChild as HTMLElement
+		// After FIX 3, the live-region span is rendered before the application div,
+		// so container.firstChild is no longer the application div — use getByRole.
+		const div = getByRole("application")
 		expect(div.tabIndex).toBe(0)
 	})
 
@@ -122,16 +124,33 @@ describe("PathfindingCanvas — accessibility attributes", () => {
 // ---------------------------------------------------------------------------
 
 describe("PathfindingCanvas — keyboard cursor navigation", () => {
-	let onCellClick: ReturnType<typeof vi.fn>
+	let onCellClick: ReturnType<typeof vi.fn<(cellIndex: number, isPointerDown?: boolean) => void>>
 
 	beforeEach(() => {
-		onCellClick = vi.fn()
+		onCellClick = vi.fn<(cellIndex: number, isPointerDown?: boolean) => void>()
 	})
 
-	it("pressing Space at initial cursor position (0,0) invokes onCellClick with index 0+1 (skips start)", () => {
-		// Start is at (0,0); pressing Space there should be a no-op (guard)
-		// or invoke onCellClick — the spec says Space toggles wall; start cell will be a no-op in grid.ts
-		// We just verify onCellClick is called with the cursor's cell index.
+	it("Space at initial cursor position (0,0) invokes onCellClick with index 0 (store no-ops start cell downstream)", () => {
+		// Start is at (0,0); Space calls onCellClick with 0 — the store decides
+		// to no-op for the start cell, but the canvas always fires the callback.
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={onCellClick}
+			/>
+		)
+		const container = getByRole("application")
+		container.focus()
+		// Press Space without moving — cursor is at (0,0) = index 0
+		fireEvent.keyDown(container, { key: " " })
+		expect(onCellClick).toHaveBeenCalledWith(0)
+	})
+
+	it("ArrowRight then Space invokes onCellClick with index 1", () => {
 		const grid = makeGrid()
 		const { getByRole } = render(
 			<PathfindingCanvas
@@ -262,24 +281,29 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 // ---------------------------------------------------------------------------
 
 describe("PathfindingCanvas — FIX 5 aria-live announcements", () => {
-	it("contains an aria-live polite region inside the container", () => {
+	it("contains an aria-live polite region as a sibling of the application div (not inside it)", () => {
 		const grid = makeGrid()
-		const { getByRole } = render(
+		// After FIX 3 the live region is outside role="application" to avoid
+		// NVDA+Firefox suppression of live regions in application mode.
+		const { container, getByRole } = render(
 			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
 		)
-		const container = getByRole("application")
-		const liveRegion = container.querySelector("[aria-live='polite']")
-		expect(liveRegion).not.toBeNull()
+		const appDiv = getByRole("application")
+		// Must NOT be inside the application div
+		expect(appDiv.querySelector("[aria-live='polite']")).toBeNull()
+		// Must be reachable from the outer render container
+		expect(container.querySelector("[aria-live='polite']")).not.toBeNull()
 	})
 
 	it("announces row/column on ArrowRight move", () => {
 		const grid = makeGrid()
-		const { getByRole } = render(
+		const { container, getByRole } = render(
 			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
 		)
-		const container = getByRole("application")
-		container.focus()
-		fireEvent.keyDown(container, { key: "ArrowRight" })
+		const appDiv = getByRole("application")
+		appDiv.focus()
+		fireEvent.keyDown(appDiv, { key: "ArrowRight" })
+		// Live region is outside role="application" — query from outer container
 		const liveRegion = container.querySelector("[aria-live='polite']")
 		// Should announce "Row 1, column 2: ..." (1-indexed)
 		expect(liveRegion?.textContent).toMatch(/row 1, column 2/i)
@@ -287,12 +311,12 @@ describe("PathfindingCanvas — FIX 5 aria-live announcements", () => {
 
 	it("announces row/column on ArrowDown move", () => {
 		const grid = makeGrid()
-		const { getByRole } = render(
+		const { container, getByRole } = render(
 			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
 		)
-		const container = getByRole("application")
-		container.focus()
-		fireEvent.keyDown(container, { key: "ArrowDown" })
+		const appDiv = getByRole("application")
+		appDiv.focus()
+		fireEvent.keyDown(appDiv, { key: "ArrowDown" })
 		const liveRegion = container.querySelector("[aria-live='polite']")
 		expect(liveRegion?.textContent).toMatch(/row 2, column 1/i)
 	})
@@ -424,6 +448,43 @@ describe("PathfindingCanvas — FIX 4 cursor resets on grid dimension change", (
 		// After grid change, cursor must be reset to (0,0) — Space = index 0
 		fireEvent.keyDown(container, { key: " " })
 		expect(onCellClick).toHaveBeenCalledWith(0)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 1 (TDD) — post-edit announcements: Space and W must announce POST-edit state
+// ---------------------------------------------------------------------------
+
+describe("PathfindingCanvas — FIX 1 post-edit live region announcements", () => {
+	it("Space on an empty cell announces 'wall' (the post-edit state, not 'empty')", () => {
+		const grid = makeGrid()
+		const { container, getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const appDiv = getByRole("application")
+		appDiv.focus()
+		// Move to (0,1) — an empty cell
+		fireEvent.keyDown(appDiv, { key: "ArrowRight" })
+		// Press Space to toggle wall
+		fireEvent.keyDown(appDiv, { key: " " })
+		// Live region is outside the application div (FIX 3), query from container
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		expect(liveRegion?.textContent).toMatch(/wall/i)
+	})
+
+	it("W on a weight-1 (empty) cell announces 'weight 2' (the post-edit state, not 'empty')", () => {
+		const grid = makeGrid()
+		const { container, getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const appDiv = getByRole("application")
+		appDiv.focus()
+		// Move to (0,1) — an empty cell (weight 1)
+		fireEvent.keyDown(appDiv, { key: "ArrowRight" })
+		// Press W to cycle weight
+		fireEvent.keyDown(appDiv, { key: "w" })
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		expect(liveRegion?.textContent).toMatch(/weight 2/i)
 	})
 })
 
