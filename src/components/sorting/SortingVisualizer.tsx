@@ -213,12 +213,8 @@ export function SortingVisualizer() {
 			setLiveComparisons(liveComparisonsRef.current)
 			setLiveSwaps(liveSwapsRef.current)
 		}
-
-		return () => {
-			// Cleanup on unmount — ensure a remount always takes the full-rebuild path
-			traceRefKey.current = null
-			prevCursorRef.current = 0
-		}
+		// No cleanup here — cleanup fires before EVERY re-run (not just unmount).
+		// Unmount-only reset is in the dedicated empty-deps effect below.
 	}, [cursor, traceResult])
 
 	// -------------------------------------------------------------------------
@@ -325,12 +321,22 @@ export function SortingVisualizer() {
 	// Consume pendingActionRef once traceResult is committed.
 	// For PENDING_STEP: seek(0) IS the first step (frame 0 = steps[0] applied).
 	// Do NOT call player.step() on top — that would land on cursor 1, skipping frame 0.
+	// For traces with steps.length <= 1 (trivial/1-element arrays): skip play/step
+	// and resolve directly to DONE to avoid the player no-oping on an already-DONE cursor.
 	useEffect(() => {
 		if (traceResult === null) return
 		const pending = pendingActionRef.current
 		if (pending === PENDING_NONE) return
 		// Guard: clear before acting to prevent re-entrant triggers
 		pendingActionRef.current = PENDING_NONE
+
+		// Trivial trace: resolve immediately to DONE without starting the player
+		if (traceResult.steps.length <= 1) {
+			playerSeek(0)
+			setStatus(SORTING_RUN_STATUS.DONE)
+			return
+		}
+
 		playerSeek(0)
 		if (pending === PENDING_PLAY) {
 			playerPlay()
@@ -339,11 +345,24 @@ export function SortingVisualizer() {
 			// PENDING_STEP: seek(0) already positioned at frame 0 — done.
 			setStatus(SORTING_RUN_STATUS.PAUSED)
 		}
+		// No cleanup here — cleanup fires before EVERY re-run (not just unmount).
+		// Unmount-only reset is in the dedicated empty-deps effect below.
+	}, [traceResult, playerSeek, playerPlay, setStatus])
+
+	// -------------------------------------------------------------------------
+	// Unmount-only cleanup: reset replay bookkeeping refs and pending flag.
+	// This MUST use empty deps so it fires only on unmount — never mid-life.
+	// The replay effect (deps [cursor, traceResult]) intentionally has no cleanup
+	// so the incremental optimization survives across cursor ticks.
+	// -------------------------------------------------------------------------
+
+	useEffect(() => {
 		return () => {
-			// Cleanup on unmount — prevent a remount from auto-playing
+			traceRefKey.current = null
+			prevCursorRef.current = 0
 			pendingActionRef.current = PENDING_NONE
 		}
-	}, [traceResult, playerSeek, playerPlay, setStatus])
+	}, [])
 
 	// -------------------------------------------------------------------------
 	// ARIA live region for sort completion and array generation (FIX 4)

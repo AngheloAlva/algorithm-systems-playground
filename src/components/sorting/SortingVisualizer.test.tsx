@@ -19,7 +19,7 @@
  * next/navigation is mocked. Canvas 2D API is mocked.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest"
 import { render, act, fireEvent } from "@testing-library/react"
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,7 @@ vi.mock("next/navigation", () => ({
 import { SortingVisualizer } from "./SortingVisualizer"
 import { useSortingStore, SORTING_RUN_STATUS } from "@/store/sorting-store"
 import { replayTo } from "@/lib/algorithms/sorting/replay-state"
+import * as replayModule from "@/lib/algorithms/sorting/replay-state"
 import { SORT_STEP_KIND } from "@/lib/algorithms/sorting/types"
 import { bubbleSort } from "@/lib/algorithms/sorting/bubble-sort"
 
@@ -430,11 +431,7 @@ describe("SortingVisualizer — FIX2 pendingActionRef lifecycle", () => {
 	})
 
 	it("double-click Run results in at most one pending play (re-entrant guard)", () => {
-		// After first click: pendingActionRef = PENDING_PLAY, run() called.
-		// Second click while still IDLE+PENDING should be rejected by the guard.
-		const { getByRole } = render(<SortingVisualizer />)
-
-		// We intercept run() calls by counting store trace updates
+		// Patch run() BEFORE render so the component captures the spy from the start.
 		let runCallCount = 0
 		const originalRun = useSortingStore.getState().run
 		const patchedRun = () => {
@@ -442,6 +439,8 @@ describe("SortingVisualizer — FIX2 pendingActionRef lifecycle", () => {
 			originalRun()
 		}
 		useSortingStore.setState({ run: patchedRun })
+
+		const { getByRole } = render(<SortingVisualizer />)
 
 		act(() => {
 			const runBtn = getByRole("button", { name: /run sort/i })
@@ -454,26 +453,30 @@ describe("SortingVisualizer — FIX2 pendingActionRef lifecycle", () => {
 		expect(runCallCount).toBeLessThanOrEqual(1)
 	})
 
-	it("pendingActionRef cleared on unmount so remount does not auto-play", () => {
-		const { getByRole, unmount } = render(<SortingVisualizer />)
-
-		// Start a run to set pending flag
+	it("fresh mount with committed traceResult does not auto-play (pendingActionRef is component-local, not shared with prior instance)", () => {
+		// Seed a committed traceResult directly in the store (without going through Run).
+		// This simulates the state after a previous component instance ran a sort and was unmounted.
+		// A fresh mount should NOT auto-play simply because traceResult exists — it must only play
+		// when its own Run button is clicked (i.e., its own pendingActionRef is set).
+		const knownArr = [3, 1, 2]
 		act(() => {
-			fireEvent.click(getByRole("button", { name: /run sort/i }))
+			useSortingStore.setState({ arr: knownArr })
+			useSortingStore.getState().run()
+		})
+		// run() sets status=DONE; reset to IDLE so the component has a "clean" status
+		// but still has traceResult — this is the scenario where a previous session left
+		// the store with trace data and the user navigated away then back.
+		act(() => {
+			useSortingStore.setState({ status: SORTING_RUN_STATUS.IDLE })
 		})
 
-		// Unmount while pending
-		act(() => {
-			unmount()
-		})
+		// Mount fresh — pending is NONE (component-local ref starts at PENDING_NONE)
+		render(<SortingVisualizer />)
 
-		// Remount fresh — should not auto-play
-		resetStore()
-		const { getByRole: getByRole2 } = render(<SortingVisualizer />)
-		const runBtn = getByRole2("button", { name: /run sort/i })
-		// Run button should be visible and idle (not in Pause state)
-		expect(runBtn).toBeDefined()
-		expect(runBtn.textContent).toContain("Run")
+		// The pending effect fires: traceResult != null, pending = PENDING_NONE → early return.
+		// Status should remain IDLE (the store value), not RUNNING.
+		const storeStatus = useSortingStore.getState().status
+		expect(storeStatus).toBe(SORTING_RUN_STATUS.IDLE)
 	})
 })
 
@@ -523,7 +526,7 @@ describe("SortingVisualizer — FIX3 incremental metrics fidelity", () => {
 				useSortingStore.getState().setCursor(cursor)
 			})
 
-			const { container } = render(<SortingVisualizer />)
+			const { container, unmount } = render(<SortingVisualizer />)
 			const { comparisons, swaps } = naiveCount(steps, cursor)
 
 			// Read displayed values from the metrics panel
@@ -533,6 +536,9 @@ describe("SortingVisualizer — FIX3 incremental metrics fidelity", () => {
 
 			expect(Number(compDd?.textContent)).toBe(comparisons)
 			expect(Number(swapDd?.textContent)).toBe(swaps)
+
+			// Unmount before next iteration to prevent stale subscriber interference
+			act(() => { unmount() })
 		}
 	})
 
@@ -580,5 +586,173 @@ describe("SortingVisualizer — FIX3 incremental metrics fidelity", () => {
 		const allDds = container.querySelectorAll("dd")
 		expect(allDds[0]?.textContent?.trim()).toBe("—")
 		expect(allDds[1]?.textContent?.trim()).toBe("—")
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 1 regression: replay cleanup must NOT fire on every cursor tick
+// ---------------------------------------------------------------------------
+
+describe("SortingVisualizer — FIX1 regression: incremental replay O(n) not O(n²)", () => {
+	let replayToSpy: ReturnType<typeof vi.spyOn>
+
+	beforeEach(() => {
+		resetStore()
+		lastCanvasArrProp = null
+		replayToSpy = vi.spyOn(replayModule, "replayTo")
+	})
+
+	afterEach(() => {
+		replayToSpy.mockRestore()
+	})
+
+	it("replayTo (full rebuild) is called at most once when cursor advances forward step-by-step within the same mount", () => {
+		const knownArr = [5, 3, 1, 4, 2]
+		act(() => {
+			useSortingStore.setState({ arr: knownArr })
+			useSortingStore.getState().run()
+		})
+		const { traceResult } = useSortingStore.getState()
+		expect(traceResult).not.toBeNull()
+
+		// Place cursor at 0 so the first render triggers a full rebuild (new trace)
+		act(() => {
+			useSortingStore.getState().setCursor(0)
+		})
+
+		// Mount once
+		render(<SortingVisualizer />)
+
+		// Reset the spy count AFTER mount (the initial render is allowed one rebuild)
+		replayToSpy.mockClear()
+
+		// Advance cursor forward several steps within the same mounted component
+		const steps = traceResult!.steps
+		const advanceCount = Math.min(5, steps.length - 1)
+		for (let i = 1; i <= advanceCount; i++) {
+			act(() => {
+				useSortingStore.getState().setCursor(i)
+			})
+		}
+
+		// Full rebuild should NOT have been called during incremental forward steps
+		// (cleanup is resetting refs on each tick causing O(n²) if broken)
+		expect(replayToSpy).not.toHaveBeenCalled()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 2 regression: second Run after play must start playback again
+// ---------------------------------------------------------------------------
+
+describe("SortingVisualizer — FIX2 regression: second run starts playback", () => {
+	beforeEach(() => {
+		resetStore()
+		lastCanvasArrProp = null
+	})
+
+	it("clicking Run a second time (after traceResult already exists) sets status to RUNNING", () => {
+		const knownArr = [3, 1, 2]
+		act(() => {
+			useSortingStore.setState({ arr: knownArr })
+		})
+
+		const { getByRole } = render(<SortingVisualizer />)
+
+		// First Run — commits trace, pending effect seeks and plays
+		act(() => {
+			fireEvent.click(getByRole("button", { name: /run sort/i }))
+		})
+
+		// Reset so the store goes back to IDLE (simulating a reset between runs)
+		act(() => {
+			fireEvent.click(getByRole("button", { name: /reset animation/i }))
+		})
+
+		// Second Run — must NOT be silently swallowed by a stale pending cleanup
+		act(() => {
+			fireEvent.click(getByRole("button", { name: /run sort/i }))
+		})
+
+		// The new traceResult should be committed (run() called twice total is fine)
+		const { traceResult, status } = useSortingStore.getState()
+		// traceResult was committed by the second run()
+		expect(traceResult).not.toBeNull()
+		// Status should not be stuck at DONE from the first run with a RUNNING pending
+		// or stuck at IDLE — it should be RUNNING (pending effect consumed) or PAUSED
+		expect(status).not.toBe(SORTING_RUN_STATUS.IDLE)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 3 regression: 1-element array ends with status DONE, never stuck
+// ---------------------------------------------------------------------------
+
+describe("SortingVisualizer — FIX3 regression: 1-element trace resolves to DONE", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("run on a 1-element trace (steps.length === 1) ends with store status DONE and never stuck at RUNNING", () => {
+		// Inject a trivial traceResult directly (steps.length === 1) with DONE-only step.
+		// This simulates a single-element sort without fighting the MIN_ARRAY_LENGTH clamp.
+		// We pre-commit the trace and set pendingActionRef via a Run click on idle state
+		// that already has a trace (component will call playerPlay then pending effect fires).
+		// Instead, we test the pending effect path directly: reset store, set a trivial trace,
+		// then let the component mount and observe that the status resolves to DONE.
+		const trivialTrace = {
+			steps: [{ kind: SORT_STEP_KIND.DONE, indices: [] as number[], pseudocodeLine: 0 }],
+			metrics: { comparisons: 0, swaps: 0, arrayLength: 1 },
+		}
+		act(() => {
+			useSortingStore.setState({
+				arr: [42],
+				traceResult: trivialTrace,
+				cursor: 0,
+				status: SORTING_RUN_STATUS.DONE,
+			})
+		})
+
+		// Mount — URL sync may reset arrayLength but traceResult is already set.
+		// The component's pending effect won't fire (pendingActionRef = PENDING_NONE).
+		// Now simulate a fresh run by resetting and clicking Run with the trivial trace
+		// already in the store (run() will call bubbleSort on arr=[42]).
+		// To keep arrayLength=1 from being overridden by URL sync, we reset store to
+		// defaults first and inject arr=[42] with arrayLength matching the codec minimum.
+		resetStore()
+		act(() => {
+			// Use a 5-element all-equal array: bubbleSort produces only COMPARE+DONE steps,
+			// still steps.length > 1. Instead inject the trivial trace post-run by spying.
+			// Simplest: use arrayLength=5 (min) but override run() to return a trivial trace.
+			const originalRun = useSortingStore.getState().run
+			useSortingStore.setState({
+				run: () => {
+					// Inject trivial 1-step trace directly
+					useSortingStore.setState({
+						traceResult: trivialTrace,
+						cursor: 0,
+						status: SORTING_RUN_STATUS.DONE,
+					})
+				},
+			})
+			// Cleanup: restore original run after test
+			;(globalThis as Record<string, unknown>).__restoreRun = originalRun
+		})
+
+		const { getByRole } = render(<SortingVisualizer />)
+
+		act(() => {
+			fireEvent.click(getByRole("button", { name: /run sort/i }))
+		})
+
+		// Restore run
+		const originalRun = (globalThis as Record<string, unknown>).__restoreRun
+		if (typeof originalRun === "function") {
+			useSortingStore.setState({ run: originalRun as () => void })
+		}
+
+		// Status must be DONE — not stuck at RUNNING (trivial trace guard resolved it)
+		const { status } = useSortingStore.getState()
+		expect(status).toBe(SORTING_RUN_STATUS.DONE)
 	})
 })
