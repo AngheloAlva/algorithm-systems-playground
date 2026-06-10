@@ -53,17 +53,39 @@ function buildDirected(edgeList: Array<[number, number]>, nodeCount: number) {
 // ---------------------------------------------------------------------------
 
 describe("runCycleDetection (G13-A) — undirected cycle", () => {
-	it("detects a cycle in an undirected triangle A-B-C", () => {
-		// A—B, B—C, C—A
+	it("detects exactly one back-edge in an undirected triangle A-B-C", () => {
+		// A—B, B—C, C—A forms one cycle; DFS must emit exactly 1 back-edge (not 2)
 		const { graph } = buildUndirected([[0, 1], [1, 2], [2, 0]], 3)
 		const result = runCycleDetection(graph, "")
 
 		const backEdgeSteps = result.steps.filter((s) => s.kind === "back-edge")
-		expect(backEdgeSteps.length).toBeGreaterThanOrEqual(1)
+		expect(backEdgeSteps.length).toBe(1)
 		expect(result.metrics.cycleDetected).toBe(true)
-		expect(result.metrics.backEdgeCount).toBeGreaterThanOrEqual(1)
+		expect(result.metrics.backEdgeCount).toBe(1)
 
 		// Every back-edge step must have a valid edgeId referencing a real edge
+		for (const step of backEdgeSteps) {
+			const s = step as BackEdgeStep
+			expect(graph.edges.has(s.edgeId)).toBe(true)
+		}
+	})
+})
+
+// ---------------------------------------------------------------------------
+// G13-A2 — Undirected 4-cycle exact back-edge count
+// ---------------------------------------------------------------------------
+
+describe("runCycleDetection (G13-A2) — undirected 4-cycle", () => {
+	it("detects exactly one back-edge in an undirected 4-cycle A-B-C-D-A", () => {
+		// A—B, B—C, C—D, D—A forms one cycle; DFS must emit exactly 1 back-edge (not 4)
+		const { graph } = buildUndirected([[0, 1], [1, 2], [2, 3], [3, 0]], 4)
+		const result = runCycleDetection(graph, "")
+
+		const backEdgeSteps = result.steps.filter((s) => s.kind === "back-edge")
+		expect(backEdgeSteps.length).toBe(1)
+		expect(result.metrics.cycleDetected).toBe(true)
+		expect(result.metrics.backEdgeCount).toBe(1)
+
 		for (const step of backEdgeSteps) {
 			const s = step as BackEdgeStep
 			expect(graph.edges.has(s.edgeId)).toBe(true)
@@ -99,8 +121,9 @@ describe("runCycleDetection (G13-C) — directed cycle", () => {
 		const result = runCycleDetection(graph, "")
 
 		const backEdgeSteps = result.steps.filter((s) => s.kind === "back-edge")
-		expect(backEdgeSteps.length).toBeGreaterThanOrEqual(1)
+		expect(backEdgeSteps.length).toBe(1)
 		expect(result.metrics.cycleDetected).toBe(true)
+		expect(result.metrics.backEdgeCount).toBe(1)
 
 		// The back-edge should be from C to A (the edge that closes the cycle)
 		const cycleClosingEdge = backEdgeSteps.find((s) => {
@@ -155,9 +178,8 @@ describe("runCycleDetection — disconnected graph, cycle in one component only"
 		const result = runCycleDetection(graph, "")
 
 		expect(result.metrics.cycleDetected).toBe(true)
-		// An undirected triangle produces ≥ 1 back-edge(s) during DFS
-		// (DFS may see the same cycle from multiple directions)
-		expect(result.metrics.backEdgeCount).toBeGreaterThanOrEqual(1)
+		// An undirected triangle produces exactly 1 back-edge; the path component adds 0
+		expect(result.metrics.backEdgeCount).toBe(1)
 
 		// Both components should be visited (multi-source)
 		const visitedNodeIds = result.steps

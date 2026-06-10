@@ -47,31 +47,14 @@ export const CYCLE_DETECTION_PSEUDOCODE = [
 ] as const
 
 // ---------------------------------------------------------------------------
-// Edge lookup helper
-// ---------------------------------------------------------------------------
-
-/**
- * Finds the edge id between two nodes.
- * For undirected graphs, checks both orientations.
- * Returns undefined if no edge found.
- */
-function findEdgeId(graph: GraphData, fromId: string, toId: string): string | undefined {
-	for (const edge of graph.edges.values()) {
-		if (edge.source === fromId && edge.target === toId) return edge.id
-		if (!graph.directed && edge.source === toId && edge.target === fromId) return edge.id
-	}
-	return undefined
-}
-
-// ---------------------------------------------------------------------------
 // runCycleDetection
 // ---------------------------------------------------------------------------
 
 /**
  * Runs whole-graph multi-source DFS cycle detection.
  *
- * @param graph   - The graph to analyze.
- * @param _startId - Ignored; all nodes are visited (requiresStartNode: false).
+ * @param graph    - The graph to analyze.
+ * @param startId  - Ignored; all nodes are visited (requiresStartNode: false).
  * @returns GraphTraceResult with tree-edge/back-edge steps and cycle metrics.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -95,9 +78,13 @@ export function runCycleDetection(graph: GraphData, startId: string): GraphTrace
 
 	const adj = buildAdjacency(graph)
 
-	// For directed graphs: track the recursion stack ("gray" set)
-	// For undirected graphs: track the immediate DFS parent per node
-	const onStack = new Set<string>() // directed: nodes currently on DFS stack
+	// onStack tracks the current DFS recursion stack ("gray" set) for both
+	// directed and undirected graphs. For directed graphs it distinguishes
+	// back-edges (ancestor on stack) from cross/forward edges (finished node).
+	// For undirected graphs it prevents double-counting: a finished descendant
+	// is no longer on the stack, so re-encountering it from a different DFS path
+	// does not emit a spurious second back-edge.
+	const onStack = new Set<string>()
 
 	// Sort node ids by label to ensure deterministic DFS root selection (ADR-4)
 	const sortedNodeIds = [...graph.nodes.values()]
@@ -109,9 +96,10 @@ export function runCycleDetection(graph: GraphData, startId: string): GraphTrace
 		.map((n) => n.id)
 
 	// ---------------------------------------------------------------------------
-	// Recursive DFS (iterative via explicit stack to avoid call stack overflow
-	// for large graphs, but recursive is cleaner for the parent-tracking logic
-	// needed for undirected cycle detection. At ≤50 nodes, recursion depth is safe.)
+	// Recursive DFS — parentEdgeId is the edge used to arrive at this node, used
+	// for undirected graphs to skip the immediate parent edge (which is always on
+	// the stack and must not be treated as a back-edge). At ≤50 nodes the
+	// recursion depth is safe.
 	// ---------------------------------------------------------------------------
 
 	function dfsRecursive(nodeId: string, parentEdgeId: string | null): void {
@@ -119,9 +107,7 @@ export function runCycleDetection(graph: GraphData, startId: string): GraphTrace
 		traversalOrder.push(nodeId)
 		steps.push({ kind: "visit", nodeId, line: 5 })
 
-		if (graph.directed) {
-			onStack.add(nodeId)
-		}
+		onStack.add(nodeId)
 
 		const neighbors = adj.get(nodeId) ?? []
 
@@ -131,28 +117,24 @@ export function runCycleDetection(graph: GraphData, startId: string): GraphTrace
 				steps.push({ kind: "tree-edge", fromId: nodeId, toId: neighborId, edgeId, line: 8 })
 				dfsRecursive(neighborId, edgeId)
 			} else if (graph.directed) {
-				// Directed: back-edge only if neighbor is on the current recursion stack
+				// Directed: back-edge only if neighbor is on the current recursion stack.
+				// An edge to a fully-finished ("black") node is a cross/forward edge, not a cycle.
 				if (onStack.has(neighborId)) {
-					const beEdgeId = findEdgeId(graph, nodeId, neighborId) ?? edgeId
-					steps.push({ kind: "back-edge", fromId: nodeId, toId: neighborId, edgeId: beEdgeId, line: 11 })
+					steps.push({ kind: "back-edge", fromId: nodeId, toId: neighborId, edgeId, line: 11 })
 					backEdgeCount++
 				}
-				// Else: cross/forward edge to a fully-finished node — not a cycle
 			} else {
-				// Undirected: back-edge only if the neighbor is NOT the immediate parent
-				// (parentEdgeId check handles the case where the same edge can appear
-				// in both directions in the adjacency list)
-				if (edgeId !== parentEdgeId) {
-					const beEdgeId = findEdgeId(graph, nodeId, neighborId) ?? edgeId
-					steps.push({ kind: "back-edge", fromId: nodeId, toId: neighborId, edgeId: beEdgeId, line: 13 })
+				// Undirected: back-edge only if the neighbor is on the current stack
+				// (rules out already-finished descendants) AND the edge is not the one
+				// we used to arrive here (rules out the immediate parent traversal).
+				if (onStack.has(neighborId) && edgeId !== parentEdgeId) {
+					steps.push({ kind: "back-edge", fromId: nodeId, toId: neighborId, edgeId, line: 13 })
 					backEdgeCount++
 				}
 			}
 		}
 
-		if (graph.directed) {
-			onStack.delete(nodeId)
-		}
+		onStack.delete(nodeId)
 	}
 
 	// Multi-source: iterate over all nodes sorted by label; skip already-visited
