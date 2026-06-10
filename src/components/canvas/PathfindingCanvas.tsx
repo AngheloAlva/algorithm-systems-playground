@@ -60,19 +60,25 @@ export interface PathfindingCanvasProps {
 	cellSize?: number
 	/**
 	 * Called when the user clicks/drags to paint/erase a cell.
-	 * `isPointerDown` is true only on the initial pointerdown event (not on move).
+	 * `isPointerDown` is true only on the initial pointerdown event (not on move),
+	 * and ALSO when the keyboard Space key fires (keyboard actions are discrete).
+	 * Returns a post-mutation announcement string (e.g. "wall", "empty",
+	 * "weight 3") when called from the keyboard Space path; the canvas uses it
+	 * to announce the actual post-edit state to screen readers.
+	 * Returns undefined for pointer drag paths (no announcement needed).
 	 */
-	onCellClick?: (cellIndex: number, isPointerDown?: boolean) => void
+	onCellClick?: (cellIndex: number, isPointerDown?: boolean) => string | undefined
 	/** Called when the user drags the start endpoint to a new cell. */
 	onStartDrag?: (cellIndex: number) => void
 	/** Called when the user drags the end endpoint to a new cell. */
 	onEndDrag?: (cellIndex: number) => void
 	/**
-	 * Called when the keyboard W key is pressed at the cursor position, or when
-	 * the weight brush is active and the user taps a cell. The caller decides
-	 * whether to cycle the cell's weight.
+	 * Called when the keyboard W key is pressed at the cursor position.
+	 * Returns a post-mutation announcement string (e.g. "weight 2", "empty")
+	 * derived from the store grid after the mutation, for screen-reader
+	 * announcement. Returns undefined for paths that are no-ops.
 	 */
-	onWeightCycle?: (cellIndex: number) => void
+	onWeightCycle?: (cellIndex: number) => string | undefined
 	/** Extra className on the container div. */
 	className?: string
 }
@@ -478,26 +484,19 @@ export function PathfindingCanvas({
 					e.preventDefault()
 					// Read from ref — always reflects the most recent arrow move even if
 					// the state update has not propagated yet (FIX 1 stale closure).
+					// Pass isPointerDown: true so keyboard Space is treated as a discrete
+					// action — resets the pointer dedupe ref so WEIGHT brush advances even
+					// if this cell was the last one painted by pointer (FIX 2).
 					const spaceRow = keyCursorRef.current.row
 					const spaceCol = keyCursorRef.current.col
 					const spaceIdx = cellIndex(spaceRow, spaceCol, cols)
-					onCellClick?.(spaceIdx)
-					// Announce POST-edit state: Space toggles wall on empty, removes wall
-					// on wall cells. Start/end cells are unaffected (no-op in store).
-					const spaceCurrentKind = grid.cells[spaceIdx]
-					let spaceDesc: string
-					if (spaceIdx === grid.start) {
-						spaceDesc = "start"
-					} else if (spaceIdx === grid.end) {
-						spaceDesc = "end"
-					} else if (spaceCurrentKind === CELL.WALL) {
-						// Wall → empty after toggle
-						spaceDesc = "empty"
-					} else {
-						// Empty/weight → wall after toggle
-						spaceDesc = "wall"
+					const spaceDesc = onCellClick?.(spaceIdx, true)
+					// Announce ACTUAL post-mutation state returned by the handler.
+					// Handler derives the text from the store grid after mutation —
+					// no prediction here, no duplicated brush semantics (FIX 1).
+					if (spaceDesc !== undefined) {
+						setLiveRegionText(`Row ${spaceRow + 1}, column ${spaceCol + 1}: ${spaceDesc}`)
 					}
-					setLiveRegionText(`Row ${spaceRow + 1}, column ${spaceCol + 1}: ${spaceDesc}`)
 					break
 				}
 				case "w":
@@ -507,23 +506,11 @@ export function PathfindingCanvas({
 					const wRow = keyCursorRef.current.row
 					const wCol = keyCursorRef.current.col
 					const wIdx = cellIndex(wRow, wCol, cols)
-					onWeightCycle?.(wIdx)
-					// Announce POST-edit state: W cycles weight [1→2→3→4→5→1].
-					// Walls are unaffected by weight cycling.
-					const wCurrentKind = grid.cells[wIdx]
-					let wDesc: string
-					if (wIdx === grid.start) {
-						wDesc = "start"
-					} else if (wIdx === grid.end) {
-						wDesc = "end"
-					} else if (wCurrentKind === CELL.WALL) {
-						wDesc = "wall"
-					} else {
-						const currentWeight = grid.weights[wIdx]
-						const nextWeight = currentWeight >= 5 ? 1 : currentWeight + 1
-						wDesc = nextWeight > 1 ? `weight ${nextWeight}` : "empty"
+					const wDesc = onWeightCycle?.(wIdx)
+					// Announce ACTUAL post-mutation state returned by the handler (FIX 1).
+					if (wDesc !== undefined) {
+						setLiveRegionText(`Row ${wRow + 1}, column ${wCol + 1}: ${wDesc}`)
 					}
-					setLiveRegionText(`Row ${wRow + 1}, column ${wCol + 1}: ${wDesc}`)
 					break
 				}
 				default:
@@ -558,7 +545,7 @@ export function PathfindingCanvas({
 			<div
 				ref={containerRef}
 				role="application"
-				aria-label={`Pathfinding grid — ${grid.rows} rows × ${grid.cols} columns. Use arrow keys to move cursor, Space to toggle wall, W to cycle weight.`}
+				aria-label={`Pathfinding grid — ${grid.rows} rows × ${grid.cols} columns. Use arrow keys to move cursor, Space to edit cell with the active brush, W to cycle weight.`}
 				tabIndex={0}
 				className={className}
 				style={{ position: "relative", width: canvasWidth, height: canvasHeight }}

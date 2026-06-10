@@ -124,15 +124,16 @@ describe("PathfindingCanvas — accessibility attributes", () => {
 // ---------------------------------------------------------------------------
 
 describe("PathfindingCanvas — keyboard cursor navigation", () => {
-	let onCellClick: ReturnType<typeof vi.fn<(cellIndex: number, isPointerDown?: boolean) => void>>
+	let onCellClick: ReturnType<typeof vi.fn<(cellIndex: number, isPointerDown?: boolean) => string | undefined>>
 
 	beforeEach(() => {
-		onCellClick = vi.fn<(cellIndex: number, isPointerDown?: boolean) => void>()
+		onCellClick = vi.fn<(cellIndex: number, isPointerDown?: boolean) => string | undefined>()
 	})
 
-	it("Space at initial cursor position (0,0) invokes onCellClick with index 0 (store no-ops start cell downstream)", () => {
-		// Start is at (0,0); Space calls onCellClick with 0 — the store decides
+	it("Space at initial cursor position (0,0) invokes onCellClick with index 0 and isPointerDown=true (keyboard is a discrete action)", () => {
+		// Start is at (0,0); Space calls onCellClick with (0, true) — the store decides
 		// to no-op for the start cell, but the canvas always fires the callback.
+		// isPointerDown: true is passed from keyboard Space to reset dedupe ref (FIX 2).
 		const grid = makeGrid()
 		const { getByRole } = render(
 			<PathfindingCanvas
@@ -147,10 +148,10 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		container.focus()
 		// Press Space without moving — cursor is at (0,0) = index 0
 		fireEvent.keyDown(container, { key: " " })
-		expect(onCellClick).toHaveBeenCalledWith(0)
+		expect(onCellClick).toHaveBeenCalledWith(0, true)
 	})
 
-	it("ArrowRight then Space invokes onCellClick with index 1", () => {
+	it("ArrowRight then Space invokes onCellClick with index 1 and isPointerDown=true", () => {
 		const grid = makeGrid()
 		const { getByRole } = render(
 			<PathfindingCanvas
@@ -165,13 +166,13 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		container.focus()
 		// Move right to (0,1) which is an empty cell
 		fireEvent.keyDown(container, { key: "ArrowRight" })
-		// Press Space to toggle wall at (0,1)
+		// Press Space to edit cell at (0,1)
 		fireEvent.keyDown(container, { key: " " })
 		// cellIndex for (0,1) in 5-col grid = 0*5+1 = 1
-		expect(onCellClick).toHaveBeenCalledWith(1)
+		expect(onCellClick).toHaveBeenCalledWith(1, true)
 	})
 
-	it("ArrowDown moves cursor one row down, Space invokes correct cell index", () => {
+	it("ArrowDown moves cursor one row down, Space invokes correct cell index with isPointerDown=true", () => {
 		const grid = makeGrid()
 		const { getByRole } = render(
 			<PathfindingCanvas
@@ -188,7 +189,7 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		fireEvent.keyDown(container, { key: "ArrowDown" })
 		fireEvent.keyDown(container, { key: " " })
 		// cellIndex for (1,0) in 5-col grid = 1*5+0 = 5
-		expect(onCellClick).toHaveBeenCalledWith(5)
+		expect(onCellClick).toHaveBeenCalledWith(5, true)
 	})
 
 	it("ArrowLeft does not go below col 0", () => {
@@ -207,8 +208,8 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		// cursor starts at (0,0) — ArrowLeft should clamp
 		fireEvent.keyDown(container, { key: "ArrowLeft" })
 		fireEvent.keyDown(container, { key: " " })
-		// Still at (0,0) which is the start — Space calls onCellClick with 0
-		expect(onCellClick).toHaveBeenCalledWith(0)
+		// Still at (0,0) which is the start — Space calls onCellClick with (0, true)
+		expect(onCellClick).toHaveBeenCalledWith(0, true)
 	})
 
 	it("ArrowUp does not go above row 0", () => {
@@ -227,8 +228,8 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		// cursor starts at (0,0) — ArrowUp should clamp
 		fireEvent.keyDown(container, { key: "ArrowUp" })
 		fireEvent.keyDown(container, { key: " " })
-		// Still at (0,0) — onCellClick called with 0
-		expect(onCellClick).toHaveBeenCalledWith(0)
+		// Still at (0,0) — onCellClick called with (0, true)
+		expect(onCellClick).toHaveBeenCalledWith(0, true)
 	})
 
 	it("ArrowRight does not exceed last column", () => {
@@ -250,7 +251,7 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		}
 		fireEvent.keyDown(container, { key: " " })
 		// Should be at (0,4) = index 4
-		expect(onCellClick).toHaveBeenCalledWith(4)
+		expect(onCellClick).toHaveBeenCalledWith(4, true)
 	})
 
 	it("ArrowDown does not exceed last row", () => {
@@ -272,7 +273,7 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 		}
 		fireEvent.keyDown(container, { key: " " })
 		// Should be at (4,0) = index 20
-		expect(onCellClick).toHaveBeenCalledWith(20)
+		expect(onCellClick).toHaveBeenCalledWith(20, true)
 	})
 })
 
@@ -381,8 +382,9 @@ describe("PathfindingCanvas — FIX 1 stale-closure-free keyboard actions", () =
 		fireEvent.keyDown(container, { key: "ArrowRight" })
 		fireEvent.keyDown(container, { key: " " })
 		// Space must act on (0,1) = index 1, NOT on (0,0) = index 0
-		expect(onCellClick).toHaveBeenCalledWith(1)
-		expect(onCellClick).not.toHaveBeenCalledWith(0)
+		// isPointerDown: true is always passed from keyboard Space (FIX 2)
+		expect(onCellClick).toHaveBeenCalledWith(1, true)
+		expect(onCellClick).not.toHaveBeenCalledWith(0, true)
 	})
 
 	it("W acts on the cell the cursor moved to, not the cell before the arrow press", () => {
@@ -446,8 +448,9 @@ describe("PathfindingCanvas — FIX 4 cursor resets on grid dimension change", (
 		onCellClick.mockClear()
 
 		// After grid change, cursor must be reset to (0,0) — Space = index 0
+		// isPointerDown: true is always passed from keyboard Space (FIX 2)
 		fireEvent.keyDown(container, { key: " " })
-		expect(onCellClick).toHaveBeenCalledWith(0)
+		expect(onCellClick).toHaveBeenCalledWith(0, true)
 	})
 })
 
@@ -456,35 +459,68 @@ describe("PathfindingCanvas — FIX 4 cursor resets on grid dimension change", (
 // ---------------------------------------------------------------------------
 
 describe("PathfindingCanvas — FIX 1 post-edit live region announcements", () => {
-	it("Space on an empty cell announces 'wall' (the post-edit state, not 'empty')", () => {
+	it("Space uses the announcement returned by onCellClick to update the live region", () => {
+		// The canvas no longer predicts post-edit state locally.
+		// It relies on onCellClick to return the ACTUAL post-mutation description.
+		// This test verifies the canvas correctly uses the returned string.
 		const grid = makeGrid()
 		const { container, getByRole } = render(
-			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={() => "wall"}
+			/>
 		)
 		const appDiv = getByRole("application")
 		appDiv.focus()
 		// Move to (0,1) — an empty cell
 		fireEvent.keyDown(appDiv, { key: "ArrowRight" })
-		// Press Space to toggle wall
+		// Press Space — callback returns "wall" (simulating Visualizer post-mutation state)
 		fireEvent.keyDown(appDiv, { key: " " })
 		// Live region is outside the application div (FIX 3), query from container
 		const liveRegion = container.querySelector("[aria-live='polite']")
 		expect(liveRegion?.textContent).toMatch(/wall/i)
 	})
 
-	it("W on a weight-1 (empty) cell announces 'weight 2' (the post-edit state, not 'empty')", () => {
+	it("W uses the announcement returned by onWeightCycle to update the live region", () => {
+		// The canvas no longer predicts post-edit weight math locally.
+		// It relies on onWeightCycle to return the ACTUAL post-mutation description.
+		// This test verifies the canvas correctly uses the returned string.
+		const grid = makeGrid()
+		const { container, getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onWeightCycle={() => "weight 2"}
+			/>
+		)
+		const appDiv = getByRole("application")
+		appDiv.focus()
+		// Move to (0,1) — an empty cell (weight 1)
+		fireEvent.keyDown(appDiv, { key: "ArrowRight" })
+		// Press W — callback returns "weight 2" (simulating Visualizer post-mutation state)
+		fireEvent.keyDown(appDiv, { key: "w" })
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		expect(liveRegion?.textContent).toMatch(/weight 2/i)
+	})
+
+	it("Space announces nothing when onCellClick is not provided", () => {
 		const grid = makeGrid()
 		const { container, getByRole } = render(
 			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
 		)
 		const appDiv = getByRole("application")
 		appDiv.focus()
-		// Move to (0,1) — an empty cell (weight 1)
 		fireEvent.keyDown(appDiv, { key: "ArrowRight" })
-		// Press W to cycle weight
-		fireEvent.keyDown(appDiv, { key: "w" })
+		fireEvent.keyDown(appDiv, { key: " " })
 		const liveRegion = container.querySelector("[aria-live='polite']")
-		expect(liveRegion?.textContent).toMatch(/weight 2/i)
+		// Only arrow-navigation text should be present (no post-edit announcement)
+		expect(liveRegion?.textContent).not.toMatch(/wall/i)
+		expect(liveRegion?.textContent).not.toMatch(/weight/i)
 	})
 })
 

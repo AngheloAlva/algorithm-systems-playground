@@ -231,3 +231,153 @@ describe("PathfindingVisualizer — keyboard W cycles weight directly (no rAF co
 		expect(weightAfter).toBe(weightBefore + 1)
 	})
 })
+
+// ---------------------------------------------------------------------------
+// FIX 1 (TDD) — live region in Visualizer shows ACTUAL post-edit state
+// ---------------------------------------------------------------------------
+
+describe("PathfindingVisualizer — FIX 1 live region reflects actual post-mutation store state", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	function getApp(container: HTMLElement) {
+		return container.querySelector("[role='application']") as HTMLElement
+	}
+
+	function getLiveRegion(container: HTMLElement) {
+		return container.querySelector("[aria-live='polite']")
+	}
+
+	it("ERASE brush + Space on empty cell announces 'empty' (no-op — post-edit state is still empty)", async () => {
+		usePathfindingStore.getState().setBrush("erase")
+		const { container } = render(<PathfindingVisualizer />)
+		const app = getApp(container)
+		app.focus()
+
+		// Navigate to (0,1) — empty cell
+		fireEvent.keyDown(app, { key: "ArrowRight" })
+		// Press Space — ERASE on empty is a no-op, post-edit state = "empty"
+		await act(async () => {
+			fireEvent.keyDown(app, { key: " " })
+		})
+
+		const live = getLiveRegion(container)
+		expect(live?.textContent).toMatch(/empty/i)
+	})
+
+	it("WEIGHT brush + Space on empty cell announces the new weight (post-edit state = 'weight 2')", async () => {
+		usePathfindingStore.getState().setBrush("weight")
+		const { container } = render(<PathfindingVisualizer />)
+		const app = getApp(container)
+		app.focus()
+
+		// Navigate to (0,1) — empty cell
+		fireEvent.keyDown(app, { key: "ArrowRight" })
+		await act(async () => {
+			fireEvent.keyDown(app, { key: " " })
+		})
+
+		const live = getLiveRegion(container)
+		expect(live?.textContent).toMatch(/weight 2/i)
+	})
+
+	it("WALL brush + Space on empty cell announces 'wall' (post-edit state = wall)", async () => {
+		usePathfindingStore.getState().setBrush("wall")
+		const { container } = render(<PathfindingVisualizer />)
+		const app = getApp(container)
+		app.focus()
+
+		// Navigate to (0,1) — empty cell (not start/end)
+		fireEvent.keyDown(app, { key: "ArrowRight" })
+		await act(async () => {
+			fireEvent.keyDown(app, { key: " " })
+		})
+
+		const live = getLiveRegion(container)
+		expect(live?.textContent).toMatch(/wall/i)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 2 (TDD) — Space keyboard press bypasses pointer-dedupe on WEIGHT brush
+// ---------------------------------------------------------------------------
+
+describe("PathfindingVisualizer — FIX 2 keyboard Space bypasses WEIGHT brush dedupe", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("pointer-down paints a cell with WEIGHT brush; keyboard Space on same cell while pointer still down must advance weight again", async () => {
+		usePathfindingStore.getState().setBrush("weight")
+		const { getByRole } = render(<PathfindingVisualizer />)
+		const canvas = getByRole("application")
+
+		vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1056,
+			height: 576,
+			right: 1056,
+			bottom: 576,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		const grid = usePathfindingStore.getState().grid
+		const cellSize = 24
+		// Cell (1,1) — matches keyboard cursor position after ArrowDown + ArrowRight
+		const targetRow = 1
+		const targetCol = 1
+		const clientX = targetCol * cellSize + cellSize / 2
+		const clientY = targetRow * cellSize + cellSize / 2
+		const targetIndex = targetRow * grid.cols + targetCol
+
+		// Paint via pointer DOWN (no pointer-up — lastPaintedCellRef stays set)
+		await act(async () => {
+			canvas.focus()
+			fireEvent.pointerDown(canvas, { clientX, clientY, pointerId: 1 })
+		})
+		expect(usePathfindingStore.getState().grid.weights[targetIndex]).toBe(2)
+
+		// Move keyboard cursor to the same cell that was last painted
+		await act(async () => {
+			fireEvent.keyDown(canvas, { key: "ArrowDown" })
+			fireEvent.keyDown(canvas, { key: "ArrowRight" })
+		})
+
+		// Press Space — without fix this is swallowed by dedupe (lastPaintedCellRef === targetIndex)
+		// With fix: Space passes isPointerDown:true → resets dedupe → weight advances to 3
+		await act(async () => {
+			fireEvent.keyDown(canvas, { key: " " })
+		})
+		expect(usePathfindingStore.getState().grid.weights[targetIndex]).toBe(3)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 3 (TDD) — aria-label is brush-neutral
+// ---------------------------------------------------------------------------
+
+describe("PathfindingVisualizer — FIX 3 aria-label is brush-neutral", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("application element aria-label does NOT say 'toggle wall'", () => {
+		const { getByRole } = render(<PathfindingVisualizer />)
+		const app = getByRole("application")
+		const label = app.getAttribute("aria-label") ?? ""
+		expect(label.toLowerCase()).not.toMatch(/toggle wall/)
+	})
+
+	it("application element aria-label mentions 'Space' and describes editing with the active brush", () => {
+		const { getByRole } = render(<PathfindingVisualizer />)
+		const app = getByRole("application")
+		const label = app.getAttribute("aria-label") ?? ""
+		expect(label).toMatch(/Space/i)
+		// Should describe editing action without implying wall-only semantics
+		expect(label.toLowerCase()).toMatch(/brush|edit|active/)
+	})
+})

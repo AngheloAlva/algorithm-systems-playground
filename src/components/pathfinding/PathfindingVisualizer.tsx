@@ -36,6 +36,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useShallow } from "zustand/react/shallow"
 
 import { usePathfindingStore, RUN_STATUS, BRUSH_MODE } from "@/store/pathfinding-store"
+import { CELL } from "@/lib/grid/grid.types"
 import { ALGORITHM_REGISTRY } from "@/lib/algorithms/pathfinding/index"
 import type { Algorithm } from "@/lib/algorithms/pathfinding/index"
 import { pathfindingCodec } from "@/lib/url-state/pathfinding-codec"
@@ -213,36 +214,62 @@ export function PathfindingVisualizer() {
 	// -------------------------------------------------------------------------
 
 	const handleCellClick = useCallback(
-		(cellIndex: number, isPointerDown?: boolean) => {
+		(cellIndex: number, isPointerDown?: boolean): string | undefined => {
 			const { rows, cols } = grid
 			const row = Math.floor(cellIndex / cols)
 			const col = cellIndex % cols
-			if (row < 0 || col < 0 || row >= rows || col >= cols) return
+			if (row < 0 || col < 0 || row >= rows || col >= cols) return undefined
 
 			if (brush === BRUSH_MODE.WALL || brush === BRUSH_MODE.ERASE) {
 				// Dedupe: skip if the pointer is still within the same cell.
 				// Guards against rAF-loop re-dispatching paintCell for a stationary
 				// pointer, which caused wall toggle flicker.
-				if (lastPaintedCellRef.current === cellIndex) return
+				// isPointerDown: true (pointer-down AND keyboard Space) resets the dedupe
+				// ref and dispatches paintCell immediately (no rAF coalescing) so that
+				// the post-mutation store state can be read synchronously for the
+				// announcement return value (FIX 2, FIX 1).
+				if (isPointerDown) {
+					lastPaintedCellRef.current = null
+				}
+				if (lastPaintedCellRef.current === cellIndex) return undefined
 				lastPaintedCellRef.current = cellIndex
-				scheduleAction(() => paintCell(row, col))
+				if (isPointerDown) {
+					// Discrete action (pointer-down or keyboard) — dispatch immediately so
+					// the post-mutation grid is readable synchronously for FIX 1 announcement.
+					paintCell(row, col)
+				} else {
+					scheduleAction(() => paintCell(row, col))
+				}
 			} else if (brush === BRUSH_MODE.WEIGHT) {
 				// Weight brush semantics:
-				// - Each pointerdown on a cell advances weight exactly one tier.
-				//   On pointerdown, lastPaintedCellRef is reset so the same cell can
-				//   be re-advanced on the next click (isPointerDown=true signals reset).
+				// - Each pointerdown (or keyboard Space) on a cell advances weight one tier.
+				//   isPointerDown: true resets the dedupe ref so repeated discrete actions
+				//   always advance (keyboard Space and new pointer-down both pass true).
 				// - During a drag, entering a NEW cell advances it once; moving within
 				//   the same cell does NOT re-advance (per-cell dedupe across move events).
 				// - Dispatched immediately — no rAF coalescing so discrete taps are
 				//   never dropped.
 				if (isPointerDown) {
-					// Reset dedupe on each new pointerdown so repeated clicks advance
+					// Reset dedupe on each new pointer-down or keyboard discrete action
 					lastPaintedCellRef.current = null
 				}
-				if (lastPaintedCellRef.current === cellIndex) return
+				if (lastPaintedCellRef.current === cellIndex) return undefined
 				lastPaintedCellRef.current = cellIndex
 				paintCell(row, col)
+			} else {
+				// Other brush modes (MOVE_START, MOVE_END) — no-op for cell click
+				return undefined
 			}
+
+			// Read ACTUAL post-mutation state from the store grid (FIX 1).
+			// This is authoritative — no local prediction, no duplicated semantics.
+			const postGrid = usePathfindingStore.getState().grid
+			const i = cellIndex
+			if (i === postGrid.start) return "start"
+			if (i === postGrid.end) return "end"
+			if (postGrid.cells[i] === CELL.WALL) return "wall"
+			const w = postGrid.weights[i]
+			return w > 1 ? `weight ${w}` : "empty"
 		},
 		[grid, brush, scheduleAction, paintCell]
 	)
@@ -250,13 +277,24 @@ export function PathfindingVisualizer() {
 	// Weight cycle callback — used by the keyboard W key in the canvas.
 	// Dispatched immediately (no rAF coalescing) so discrete W presses are
 	// never dropped.
+	// Returns the ACTUAL post-mutation cell description derived from the store
+	// grid after the mutation — used by the canvas for screen-reader announcement
+	// (FIX 1). Uses MAX_WEIGHT from grid types — no hardcoded value (FIX 4).
 	const handleWeightCycle = useCallback(
-		(cellIdx: number) => {
+		(cellIdx: number): string | undefined => {
 			const { rows, cols } = grid
 			const row = Math.floor(cellIdx / cols)
 			const col = cellIdx % cols
-			if (row < 0 || col < 0 || row >= rows || col >= cols) return
+			if (row < 0 || col < 0 || row >= rows || col >= cols) return undefined
 			cycleWeightAt(row, col)
+			// Read ACTUAL post-mutation state from the store grid (FIX 1).
+			const postGrid = usePathfindingStore.getState().grid
+			const i = cellIdx
+			if (i === postGrid.start) return "start"
+			if (i === postGrid.end) return "end"
+			if (postGrid.cells[i] === CELL.WALL) return "wall"
+			const w = postGrid.weights[i]
+			return w > 1 ? `weight ${w}` : "empty"
 		},
 		[grid, cycleWeightAt]
 	)
