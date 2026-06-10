@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { SORT_STEP_KIND } from "@/lib/algorithms/sorting/types"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useShallow } from "zustand/react/shallow"
 
@@ -60,6 +61,14 @@ import {
 import { Slider } from "@/components/ui/slider"
 
 import { PlayIcon, PauseIcon, SkipForwardIcon, RotateCcwIcon, ShuffleIcon } from "lucide-react"
+
+// ---------------------------------------------------------------------------
+// Pending-action constants (module-level so effects can reference them stably)
+// ---------------------------------------------------------------------------
+
+const PENDING_NONE = 0 as const
+const PENDING_PLAY = 1 as const
+const PENDING_STEP = 2 as const
 
 // ---------------------------------------------------------------------------
 // Array mode display labels
@@ -181,8 +190,8 @@ export function SortingVisualizer() {
 			let s = 0
 			for (let i = 0; i <= Math.min(cursor, traceResult.steps.length - 1); i++) {
 				const k = traceResult.steps[i].kind
-				if (k === "compare") c++
-				else if (k === "swap") s++
+				if (k === SORT_STEP_KIND.COMPARE) c++
+				else if (k === SORT_STEP_KIND.SWAP) s++
 			}
 			liveComparisonsRef.current = c
 			liveSwapsRef.current = s
@@ -196,13 +205,19 @@ export function SortingVisualizer() {
 			for (let i = from; i <= to; i++) {
 				applyStep(workingArrRef.current, traceResult.steps[i])
 				const k = traceResult.steps[i].kind
-				if (k === "compare") liveComparisonsRef.current++
-				else if (k === "swap") liveSwapsRef.current++
+				if (k === SORT_STEP_KIND.COMPARE) liveComparisonsRef.current++
+				else if (k === SORT_STEP_KIND.SWAP) liveSwapsRef.current++
 			}
 			prevCursorRef.current = cursor
 			setDisplayArr([...workingArrRef.current])
 			setLiveComparisons(liveComparisonsRef.current)
 			setLiveSwaps(liveSwapsRef.current)
+		}
+
+		return () => {
+			// Cleanup on unmount — ensure a remount always takes the full-rebuild path
+			traceRefKey.current = null
+			prevCursorRef.current = 0
 		}
 	}, [cursor, traceResult])
 
@@ -255,12 +270,9 @@ export function SortingVisualizer() {
 	}, [])
 
 	// -------------------------------------------------------------------------
-	// FIX 2: pendingPlayRef — replaces setTimeout(0) race
+	// pendingPlayRef — replaces setTimeout(0) race
 	// -------------------------------------------------------------------------
 
-	const PENDING_NONE = 0
-	const PENDING_PLAY = 1
-	const PENDING_STEP = 2
 	const pendingActionRef = useRef<0 | 1 | 2>(PENDING_NONE)
 
 	// -------------------------------------------------------------------------
@@ -278,11 +290,19 @@ export function SortingVisualizer() {
 
 	const player = useStepPlayer({ length: traceLength, speed, onAdvance })
 
-	// Destructure player for stable references in effects (avoids exhaustive-deps
-	// warnings from accessing properties via the `player` binding).
-	const { status: playerStatus, pause: playerPause } = player
+	// Destructure player for stable references in effects and handlers (avoids
+	// exhaustive-deps warnings from accessing properties via the `player` binding;
+	// all of these are useCallback-stable from useStepPlayer).
+	const {
+		status: playerStatus,
+		pause: playerPause,
+		seek: playerSeek,
+		play: playerPlay,
+		step: playerStep,
+		reset: playerReset,
+	} = player
 
-	// FIX 5: Sync player stop → store status
+	// Sync player stop → store status
 	// playerPause is useCallback-stable from useStepPlayer; all deps are explicit.
 	useEffect(() => {
 		if (status === SORTING_RUN_STATUS.IDLE || status === SORTING_RUN_STATUS.DONE) {
@@ -295,29 +315,35 @@ export function SortingVisualizer() {
 	// Mirror player done → store done
 	useEffect(() => {
 		if (
-			player.status === PLAYER_STATUS.DONE &&
+			playerStatus === PLAYER_STATUS.DONE &&
 			(status === SORTING_RUN_STATUS.RUNNING || status === SORTING_RUN_STATUS.PAUSED)
 		) {
 			setStatus(SORTING_RUN_STATUS.DONE)
 		}
-	}, [player.status, status, setStatus])
+	}, [playerStatus, status, setStatus])
 
-	// FIX 2: consume pendingActionRef once traceResult is committed
+	// Consume pendingActionRef once traceResult is committed.
+	// For PENDING_STEP: seek(0) IS the first step (frame 0 = steps[0] applied).
+	// Do NOT call player.step() on top — that would land on cursor 1, skipping frame 0.
 	useEffect(() => {
 		if (traceResult === null) return
 		const pending = pendingActionRef.current
 		if (pending === PENDING_NONE) return
 		// Guard: clear before acting to prevent re-entrant triggers
 		pendingActionRef.current = PENDING_NONE
-		player.seek(0)
+		playerSeek(0)
 		if (pending === PENDING_PLAY) {
-			player.play()
+			playerPlay()
 			setStatus(SORTING_RUN_STATUS.RUNNING)
 		} else {
-			player.step()
+			// PENDING_STEP: seek(0) already positioned at frame 0 — done.
 			setStatus(SORTING_RUN_STATUS.PAUSED)
 		}
-	}, [traceResult, player, setStatus])
+		return () => {
+			// Cleanup on unmount — prevent a remount from auto-playing
+			pendingActionRef.current = PENDING_NONE
+		}
+	}, [traceResult, playerSeek, playerPlay, setStatus])
 
 	// -------------------------------------------------------------------------
 	// ARIA live region for sort completion and array generation (FIX 4)
@@ -329,18 +355,18 @@ export function SortingVisualizer() {
 	// liveText is assembled after isDone is computed (see below in "Derived state")
 
 	// -------------------------------------------------------------------------
-	// Run button handler (FIX 2: no setTimeout race)
+	// Run button handler
 	// -------------------------------------------------------------------------
 
 	const handleRun = useCallback(() => {
-		if (status === SORTING_RUN_STATUS.RUNNING || player.status === PLAYER_STATUS.PLAYING) {
-			player.pause()
+		if (status === SORTING_RUN_STATUS.RUNNING || playerStatus === PLAYER_STATUS.PLAYING) {
+			playerPause()
 			setStatus(SORTING_RUN_STATUS.PAUSED)
 			return
 		}
 
-		if (player.status === PLAYER_STATUS.PAUSED) {
-			player.play()
+		if (playerStatus === PLAYER_STATUS.PAUSED) {
+			playerPlay()
 			setStatus(SORTING_RUN_STATUS.RUNNING)
 			return
 		}
@@ -348,13 +374,15 @@ export function SortingVisualizer() {
 		// Guard: if already pending, ignore re-entrant click
 		if (pendingActionRef.current !== PENDING_NONE) return
 
-		// Fresh run — set pending flag, then call run().
-		// The useEffect watching traceResult will seek(0) + play() once the
-		// new trace is committed to the store (avoids setTimeout(0) race).
+		// Fresh run — set pending flag, then call run() + setCursor(0).
+		// Calling setCursor(0) here (in the same event handler) lets React batch
+		// both state updates into one render so the replay effect never sees the
+		// store's trailing cursor=steps.length-1 before the pending effect seeks to 0.
 		pendingActionRef.current = PENDING_PLAY
-		player.reset()
+		playerReset()
 		run()
-	}, [status, player, run, setStatus])
+		setCursor(0)
+	}, [status, playerStatus, playerPause, playerPlay, playerReset, run, setCursor, setStatus])
 
 	const handleStep = useCallback(() => {
 		if (status === SORTING_RUN_STATUS.IDLE) {
@@ -362,22 +390,25 @@ export function SortingVisualizer() {
 			if (pendingActionRef.current !== PENDING_NONE) return
 			pendingActionRef.current = PENDING_STEP
 			run()
+			setCursor(0)
 			return
 		}
-		player.step()
+		playerStep()
 		setStatus(SORTING_RUN_STATUS.PAUSED)
-	}, [status, run, player, setStatus])
+	}, [status, run, setCursor, playerStep, setStatus])
 
 	const handleReset = useCallback(() => {
-		player.reset()
+		pendingActionRef.current = PENDING_NONE
+		playerReset()
 		resetRun()
-	}, [player, resetRun])
+	}, [playerReset, resetRun])
 
 	const handleGenerate = useCallback(() => {
-		player.reset()
+		pendingActionRef.current = PENDING_NONE
+		playerReset()
 		generateArray()
 		setGenerateText(`New array generated. Length: ${arrayLength}.`)
-	}, [player, generateArray, arrayLength])
+	}, [playerReset, generateArray, arrayLength])
 
 	// -------------------------------------------------------------------------
 	// Config change handlers with URL sync
@@ -429,9 +460,9 @@ export function SortingVisualizer() {
 	// Derived state
 	// -------------------------------------------------------------------------
 
-	const isRunning = status === SORTING_RUN_STATUS.RUNNING || player.status === PLAYER_STATUS.PLAYING
-	const isPaused = status === SORTING_RUN_STATUS.PAUSED || player.status === PLAYER_STATUS.PAUSED
-	const isDone = status === SORTING_RUN_STATUS.DONE && player.status === PLAYER_STATUS.DONE
+	const isRunning = status === SORTING_RUN_STATUS.RUNNING || playerStatus === PLAYER_STATUS.PLAYING
+	const isPaused = status === SORTING_RUN_STATUS.PAUSED || playerStatus === PLAYER_STATUS.PAUSED
+	const isDone = status === SORTING_RUN_STATUS.DONE && playerStatus === PLAYER_STATUS.DONE
 
 	// Current step for canvas highlight
 	const currentStep = traceResult?.steps[cursor] ?? null

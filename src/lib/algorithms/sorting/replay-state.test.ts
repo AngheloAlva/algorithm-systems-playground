@@ -134,22 +134,23 @@ const INPUTS = [
 	[42, 1],
 ]
 
-function sorted(arr: number[]): number[] {
+function sorted(arr: ReadonlyArray<number>): number[] {
 	return [...arr].sort((a, b) => a - b)
 }
 
 describe("replayTo — bubble sort traces reach sorted state at final cursor", () => {
 	for (const input of INPUTS) {
 		it(`input=${JSON.stringify(input)}`, () => {
-			const trace = bubbleSort(input)
+			const frozenInput = Object.freeze([...input])
+			const trace = bubbleSort(frozenInput)
 			const lastCursor = trace.steps.length - 1
 			if (lastCursor < 0) {
 				// empty array: no steps, nothing to replay
-				expect(input).toEqual([])
+				expect(frozenInput).toEqual([])
 				return
 			}
-			const result = replayTo(input, trace.steps, lastCursor)
-			expect(result).toEqual(sorted(input))
+			const result = replayTo(frozenInput, trace.steps, lastCursor)
+			expect(result).toEqual(sorted(frozenInput))
 		})
 	}
 })
@@ -157,14 +158,15 @@ describe("replayTo — bubble sort traces reach sorted state at final cursor", (
 describe("replayTo — merge sort traces reach sorted state at final cursor", () => {
 	for (const input of INPUTS) {
 		it(`input=${JSON.stringify(input)}`, () => {
-			const trace = mergeSort(input)
+			const frozenInput = Object.freeze([...input])
+			const trace = mergeSort(frozenInput)
 			const lastCursor = trace.steps.length - 1
 			if (lastCursor < 0) {
-				expect(input).toEqual([])
+				expect(frozenInput).toEqual([])
 				return
 			}
-			const result = replayTo(input, trace.steps, lastCursor)
-			expect(result).toEqual(sorted(input))
+			const result = replayTo(frozenInput, trace.steps, lastCursor)
+			expect(result).toEqual(sorted(frozenInput))
 		})
 	}
 })
@@ -172,14 +174,15 @@ describe("replayTo — merge sort traces reach sorted state at final cursor", ()
 describe("replayTo — quick sort traces reach sorted state at final cursor", () => {
 	for (const input of INPUTS) {
 		it(`input=${JSON.stringify(input)}`, () => {
-			const trace = quickSort(input)
+			const frozenInput = Object.freeze([...input])
+			const trace = quickSort(frozenInput)
 			const lastCursor = trace.steps.length - 1
 			if (lastCursor < 0) {
-				expect(input).toEqual([])
+				expect(frozenInput).toEqual([])
 				return
 			}
-			const result = replayTo(input, trace.steps, lastCursor)
-			expect(result).toEqual(sorted(input))
+			const result = replayTo(frozenInput, trace.steps, lastCursor)
+			expect(result).toEqual(sorted(frozenInput))
 		})
 	}
 })
@@ -187,14 +190,15 @@ describe("replayTo — quick sort traces reach sorted state at final cursor", ()
 describe("replayTo — heap sort traces reach sorted state at final cursor", () => {
 	for (const input of INPUTS) {
 		it(`input=${JSON.stringify(input)}`, () => {
-			const trace = heapSort(input)
+			const frozenInput = Object.freeze([...input])
+			const trace = heapSort(frozenInput)
 			const lastCursor = trace.steps.length - 1
 			if (lastCursor < 0) {
-				expect(input).toEqual([])
+				expect(frozenInput).toEqual([])
 				return
 			}
-			const result = replayTo(input, trace.steps, lastCursor)
-			expect(result).toEqual(sorted(input))
+			const result = replayTo(frozenInput, trace.steps, lastCursor)
+			expect(result).toEqual(sorted(frozenInput))
 		})
 	}
 })
@@ -202,7 +206,8 @@ describe("replayTo — heap sort traces reach sorted state at final cursor", () 
 describe("replayTo — quick sort PLACE (no value) does not corrupt array", () => {
 	it("any PLACE step with undefined value must not write to array", () => {
 		const input = [3, 1, 2]
-		const trace = quickSort(input)
+		const frozenInput = Object.freeze([...input])
+		const trace = quickSort(frozenInput)
 		const placeSteps = trace.steps.filter(
 			(s) => s.kind === SORT_STEP_KIND.PLACE && s.value === undefined
 		)
@@ -212,15 +217,16 @@ describe("replayTo — quick sort PLACE (no value) does not corrupt array", () =
 
 		// Ensure replayTo does not corrupt: final result is still sorted
 		const lastCursor = trace.steps.length - 1
-		const result = replayTo(input, trace.steps, lastCursor)
-		expect(result).toEqual(sorted(input))
+		const result = replayTo(frozenInput, trace.steps, lastCursor)
+		expect(result).toEqual(sorted(frozenInput))
 	})
 })
 
 describe("replayTo — merge sort PLACE (with value) writes correctly", () => {
 	it("all merge PLACE steps carry a value", () => {
 		const input = [3, 1, 2]
-		const trace = mergeSort(input)
+		const frozenInput = Object.freeze([...input])
+		const trace = mergeSort(frozenInput)
 		const placeSteps = trace.steps.filter((s) => s.kind === SORT_STEP_KIND.PLACE)
 		for (const step of placeSteps) {
 			expect(step.value).not.toBeUndefined()
@@ -231,23 +237,25 @@ describe("replayTo — merge sort PLACE (with value) writes correctly", () => {
 describe("replayTo — intermediate cursors produce valid intermediate states", () => {
 	it("bubble sort: state at cursor k matches reference replay", () => {
 		const input = [5, 3, 1, 4, 2]
-		const trace = bubbleSort(input)
+		const frozenInput = Object.freeze([...input])
+		const trace = bubbleSort(frozenInput)
 		// Test at several cursors by comparing replayTo against a reference loop
-		const refArr = [...input]
+		const refArr = [...frozenInput]
 		for (let k = 0; k < Math.min(trace.steps.length, 10); k++) {
 			applyStep(refArr, trace.steps[k])
-			const result = replayTo(input, trace.steps, k)
+			const result = replayTo(frozenInput, trace.steps, k)
 			expect(result).toEqual(refArr)
 		}
 	})
 
 	it("merge sort: state at cursor k matches reference replay", () => {
 		const input = [5, 3, 1, 4, 2]
-		const trace = mergeSort(input)
-		const refArr = [...input]
+		const frozenInput = Object.freeze([...input])
+		const trace = mergeSort(frozenInput)
+		const refArr = [...frozenInput]
 		for (let k = 0; k < Math.min(trace.steps.length, 10); k++) {
 			applyStep(refArr, trace.steps[k])
-			const result = replayTo(input, trace.steps, k)
+			const result = replayTo(frozenInput, trace.steps, k)
 			expect(result).toEqual(refArr)
 		}
 	})
