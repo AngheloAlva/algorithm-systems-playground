@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest"
-import { manhattan, octile } from "./heuristics"
+import { manhattan, chebyshev } from "./heuristics"
 
 // ---------------------------------------------------------------------------
-// Helper — compute true BFS cost (unit-weight, 4-conn) between two flat indices
+// Helper — compute true costs between two flat indices
 // ---------------------------------------------------------------------------
 
 function trueManhattan(a: number, b: number, cols: number): number {
@@ -13,14 +13,14 @@ function trueManhattan(a: number, b: number, cols: number): number {
 	return Math.abs(ar - br) + Math.abs(ac - bc)
 }
 
-function trueOctile(a: number, b: number, cols: number): number {
+function trueChebyshev(a: number, b: number, cols: number): number {
 	const ar = Math.floor(a / cols)
 	const ac = a % cols
 	const br = Math.floor(b / cols)
 	const bc = b % cols
 	const dr = Math.abs(ar - br)
 	const dc = Math.abs(ac - bc)
-	return Math.max(dr, dc) + (Math.SQRT2 - 1) * Math.min(dr, dc)
+	return Math.max(dr, dc)
 }
 
 // ---------------------------------------------------------------------------
@@ -81,36 +81,36 @@ describe("manhattan heuristic", () => {
 })
 
 // ---------------------------------------------------------------------------
-// octile(a, b, cols)
+// chebyshev(a, b, cols)
 // ---------------------------------------------------------------------------
 
-describe("octile heuristic", () => {
+describe("chebyshev heuristic", () => {
 	it("returns 0 at the goal (a === b)", () => {
-		expect(octile(5, 5, 10)).toBe(0)
+		expect(chebyshev(5, 5, 10)).toBe(0)
 	})
 
 	it("returns 1 for cardinal neighbors", () => {
-		expect(octile(0, 1, 10)).toBe(1)
-		expect(octile(0, 10, 10)).toBe(1)
+		expect(chebyshev(0, 1, 10)).toBe(1)
+		expect(chebyshev(0, 10, 10)).toBe(1)
 	})
 
-	it("returns √2 for diagonal neighbors", () => {
-		// (0,0) → (1,1) with cols=10
-		expect(octile(0, 11, 10)).toBeCloseTo(Math.SQRT2, 10)
+	it("returns 1 for diagonal neighbors", () => {
+		// (0,0) → (1,1) with cols=10: max(1,1) = 1
+		expect(chebyshev(0, 11, 10)).toBe(1)
 	})
 
 	it("is symmetric", () => {
 		const a = 3
 		const b = 27
 		const cols = 10
-		expect(octile(a, b, cols)).toBeCloseTo(octile(b, a, cols), 10)
+		expect(chebyshev(a, b, cols)).toBe(chebyshev(b, a, cols))
 	})
 
 	/**
 	 * Admissibility on unit-weight 8-connected grid:
-	 * octile(a, b) ≤ true_diagonal_cost(a, b) where true cost counts
-	 * the minimum number of diagonal + cardinal moves.
-	 * On unit-weight grids, octile equals the true cost (tight bound).
+	 * chebyshev(a, b) ≤ true_cost(a, b) where true cost counts
+	 * the minimum number of moves (diagonal moves cover both axes).
+	 * On unit-weight grids, Chebyshev equals the true cost (tight bound).
 	 */
 	it("never overestimates on unit-weight 8-connected grid (admissibility) — sampled", () => {
 		const rows = 10
@@ -118,21 +118,20 @@ describe("octile heuristic", () => {
 		const size = rows * cols
 		for (let a = 0; a < size; a += 7) {
 			for (let b = 0; b < size; b += 11) {
-				const h = octile(a, b, cols)
-				const trueCost = trueOctile(a, b, cols)
-				// Allow tiny floating-point tolerance
-				expect(h).toBeLessThanOrEqual(trueCost + 1e-10)
+				const h = chebyshev(a, b, cols)
+				const trueCost = trueChebyshev(a, b, cols)
+				expect(h).toBeLessThanOrEqual(trueCost)
 			}
 		}
 	})
 
-	it("equals true octile distance on unit-weight 8-connected grid", () => {
+	it("equals true Chebyshev distance on unit-weight 8-connected grid (tight bound)", () => {
 		const cols = 10
-		// (1,2) → (4,6): dr=3, dc=4 → octile = 4 + (√2-1)*3
+		// (1,2) → (4,6): dr=3, dc=4 → chebyshev = max(3,4) = 4
 		const a = 1 * cols + 2
 		const b = 4 * cols + 6
-		const expected = trueOctile(a, b, cols)
-		expect(octile(a, b, cols)).toBeCloseTo(expected, 10)
+		expect(chebyshev(a, b, cols)).toBe(4)
+		expect(chebyshev(a, b, cols)).toBe(trueChebyshev(a, b, cols))
 	})
 
 	/**
@@ -144,12 +143,12 @@ describe("octile heuristic", () => {
 	 * Only path: 0 → 1 → 2.
 	 * True path cost = weight[0] + weight[1] = 3 + 5 = 8  (end cell excluded).
 	 *
-	 * octile(0, 2, cols=3): dr=0, dc=2 → octile = 2 (unit distance, no diagonal).
-	 * Admissibility: octile(2) ≤ true_cost(8). ✓
+	 * chebyshev(0, 2, cols=3): dr=0, dc=2 → chebyshev = max(0,2) = 2.
+	 * Admissibility: chebyshev(2) ≤ true_cost(8). ✓
 	 *
 	 * Manhattan equivalent: manhattan(0, 2, cols=3) = 2 ≤ 8. ✓
 	 */
-	it("on weighted grid, octile and manhattan ≤ true weighted path cost (concrete admissibility)", () => {
+	it("on weighted grid, chebyshev and manhattan ≤ true weighted path cost (concrete admissibility)", () => {
 		// 1-row, 3-col grid: start=(0,0), end=(0,2), weights=[3,5,2]
 		const cols = 3
 		const start = 0 // cell (0,0), weight 3
@@ -158,16 +157,16 @@ describe("octile heuristic", () => {
 		const weights = [3, 5, 2]
 		const trueCost = weights[0] + weights[1] // = 8 (end excluded)
 
-		const hOctile = octile(start, end, cols)
+		const hChebyshev = chebyshev(start, end, cols)
 		const hManhattan = manhattan(start, end, cols)
 
-		// Octile admissibility: heuristic must not exceed true cost
-		expect(hOctile).toBeLessThanOrEqual(trueCost + 1e-10)
+		// Chebyshev admissibility: heuristic must not exceed true cost
+		expect(hChebyshev).toBeLessThanOrEqual(trueCost)
 		// Manhattan admissibility: same requirement
-		expect(hManhattan).toBeLessThanOrEqual(trueCost + 1e-10)
+		expect(hManhattan).toBeLessThanOrEqual(trueCost)
 
 		// Verify heuristic values are as expected (unit distances)
-		expect(hOctile).toBeCloseTo(2, 10) // dr=0, dc=2 → octile=2
+		expect(hChebyshev).toBe(2) // dr=0, dc=2 → max(0,2) = 2
 		expect(hManhattan).toBe(2) // |0-0| + |0-2| = 2
 	})
 })
