@@ -385,10 +385,17 @@ export function PathfindingCanvas({
 				isDraggingRef.current = "end"
 			} else {
 				isDraggingRef.current = "wall"
-				onCellClick?.(cellIndex, true)
+				const desc = onCellClick?.(cellIndex, true)
+				// Provide live-region feedback for pointer-based assistive-tech users.
+				// Uses the same "Row N, column M: {desc}" format as keyboard paths.
+				if (desc !== undefined) {
+					const row = Math.floor(cellIndex / grid.cols)
+					const col = cellIndex % grid.cols
+					setLiveRegionText(`Row ${row + 1}, column ${col + 1}: ${desc}`)
+				}
 			}
 		},
-		[getCellFromEvent, grid.cells, onCellClick]
+		[getCellFromEvent, grid.cells, grid.cols, onCellClick]
 	)
 
 	const handlePointerMove = useCallback(

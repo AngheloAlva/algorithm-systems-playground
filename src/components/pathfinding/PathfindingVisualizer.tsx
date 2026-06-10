@@ -238,7 +238,11 @@ export function PathfindingVisualizer() {
 					// the post-mutation grid is readable synchronously for FIX 1 announcement.
 					paintCell(row, col)
 				} else {
+					// Drag path: mutation is deferred to rAF — return undefined immediately
+					// so the post-mutation read below is never reached on a pre-mutation grid.
+					// Per onCellClick JSDoc: drag paths return undefined (no announcement needed).
 					scheduleAction(() => paintCell(row, col))
+					return undefined
 				}
 			} else if (brush === BRUSH_MODE.WEIGHT) {
 				// Weight brush semantics:

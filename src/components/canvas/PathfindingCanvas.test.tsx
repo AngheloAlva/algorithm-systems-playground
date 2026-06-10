@@ -70,6 +70,10 @@ beforeAll(() => {
 		takeRecords = vi.fn(() => [])
 	}
 	vi.stubGlobal("MutationObserver", MutationObserverMock)
+
+	// Stub pointer capture APIs (required for pointerdown tests)
+	HTMLElement.prototype.setPointerCapture = vi.fn()
+	HTMLElement.prototype.releasePointerCapture = vi.fn()
 })
 
 // ---------------------------------------------------------------------------
@@ -566,5 +570,111 @@ describe("PathfindingCanvas — keyboard weight cycling (w key)", () => {
 		fireEvent.keyDown(container, { key: "ArrowRight" })
 		fireEvent.keyDown(container, { key: "W" })
 		expect(onWeightCycle).toHaveBeenCalledWith(1)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 2 iteration 4 (TDD) — pointerdown on a wall cell updates the live region
+// ---------------------------------------------------------------------------
+
+describe("PathfindingCanvas — FIX 2 iter4 pointerdown sets live region via onCellClick return", () => {
+	it("pointerdown on a cell fires onCellClick and uses its return value to set the live region", () => {
+		// Arrange: onCellClick returns "wall" simulating a post-mutation wall state
+		const grid = makeGrid()
+		const { container, getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={() => "wall"}
+			/>
+		)
+		const appDiv = getByRole("application")
+
+		vi.spyOn(appDiv, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 120,
+			height: 120,
+			right: 120,
+			bottom: 120,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		// Fire pointerdown on cell (0,1) — cellSize=24, x=36, y=12
+		fireEvent.pointerDown(appDiv, { clientX: 36, clientY: 12, pointerId: 1 })
+
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		// Live region must contain the row/col prefix AND the returned description
+		expect(liveRegion?.textContent).toMatch(/row 1, column 2/i)
+		expect(liveRegion?.textContent).toMatch(/wall/i)
+	})
+
+	it("pointerdown on a cell: live region text uses 'Row N, column M: {desc}' format", () => {
+		const grid = makeGrid(5, 5)
+		const { container, getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={() => "empty"}
+			/>
+		)
+		const appDiv = getByRole("application")
+
+		vi.spyOn(appDiv, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 120,
+			height: 120,
+			right: 120,
+			bottom: 120,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		// Cell (1,0) — clientX=12, clientY=36
+		fireEvent.pointerDown(appDiv, { clientX: 12, clientY: 36, pointerId: 1 })
+
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		expect(liveRegion?.textContent).toMatch(/row 2, column 1/i)
+		expect(liveRegion?.textContent).toMatch(/empty/i)
+	})
+
+	it("pointerdown when onCellClick returns undefined does NOT update the live region", () => {
+		const grid = makeGrid()
+		const { container, getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={() => undefined}
+			/>
+		)
+		const appDiv = getByRole("application")
+
+		vi.spyOn(appDiv, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 120,
+			height: 120,
+			right: 120,
+			bottom: 120,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		fireEvent.pointerDown(appDiv, { clientX: 12, clientY: 12, pointerId: 1 })
+
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		// Live region should remain empty (no update from undefined return)
+		expect(liveRegion?.textContent).toBe("")
 	})
 })

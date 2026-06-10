@@ -381,3 +381,142 @@ describe("PathfindingVisualizer — FIX 3 aria-label is brush-neutral", () => {
 		expect(label.toLowerCase()).toMatch(/brush|edit|active/)
 	})
 })
+
+// ---------------------------------------------------------------------------
+// FIX 1 iteration 4 (TDD) — drag path (isPointerDown falsy) must return undefined
+// ---------------------------------------------------------------------------
+
+describe("PathfindingVisualizer — FIX 1 iter4 drag-path returns undefined", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("WALL brush drag (pointermove, no isPointerDown) onCellClick returns undefined", async () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const onCellClick = vi.fn<(cellIndex: number, isPointerDown?: boolean) => string | undefined>()
+		const { getByRole } = render(<PathfindingVisualizer />)
+		const canvas = getByRole("application")
+
+		vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1056,
+			height: 576,
+			right: 1056,
+			bottom: 576,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		const grid = usePathfindingStore.getState().grid
+		const cellSize = 24
+		// Start drag on cell (3,3) then move to (3,4) — both are empty
+		const startX = 3 * cellSize + cellSize / 2
+		const startY = 3 * cellSize + cellSize / 2
+		const moveX = 4 * cellSize + cellSize / 2
+		const moveY = 3 * cellSize + cellSize / 2
+
+		// Capture return values through the canvas prop chain via a wrapper that
+		// intercepts onCellClick returns. Since PathfindingVisualizer wires
+		// handleCellClick internally, we verify the drag path by watching the
+		// live region: on a drag move the live region must NOT be updated (because
+		// handleCellClick returns undefined and the canvas only sets liveRegionText
+		// when the returned value is a non-undefined string).
+		await act(async () => {
+			fireEvent.pointerDown(canvas, { clientX: startX, clientY: startY, pointerId: 1 })
+		})
+
+		// After pointer-down the live region is set (isPointerDown=true path returns a string)
+		const liveRegionAfterDown = document.querySelector("[aria-live='polite']")
+		const textAfterDown = liveRegionAfterDown?.textContent ?? ""
+
+		// Now simulate a pointermove to a NEW cell — drag path (no isPointerDown)
+		// handleCellClick must return undefined so the live region stays unchanged
+		await act(async () => {
+			fireEvent.pointerMove(canvas, { clientX: moveX, clientY: moveY, pointerId: 1 })
+		})
+
+		const liveRegionAfterMove = document.querySelector("[aria-live='polite']")
+		const textAfterMove = liveRegionAfterMove?.textContent ?? ""
+
+		// The live region text must NOT have changed after the drag move
+		// (undefined return → no setLiveRegionText call)
+		expect(textAfterMove).toBe(textAfterDown)
+
+		await act(async () => {
+			fireEvent.pointerUp(canvas, { clientX: moveX, clientY: moveY, pointerId: 1 })
+		})
+
+		void grid
+		void onCellClick
+	})
+
+	it("ERASE brush drag (pointermove, no isPointerDown) onCellClick returns undefined — live region unchanged", async () => {
+		// First place a wall at (3,3) so erase has something to operate on
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const { getByRole, unmount } = render(<PathfindingVisualizer />)
+		const canvas = getByRole("application")
+
+		vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1056,
+			height: 576,
+			right: 1056,
+			bottom: 576,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		const cellSize = 24
+		const wallX = 3 * cellSize + cellSize / 2
+		const wallY = 3 * cellSize + cellSize / 2
+		await act(async () => {
+			fireEvent.pointerDown(canvas, { clientX: wallX, clientY: wallY, pointerId: 1 })
+			fireEvent.pointerUp(canvas, { clientX: wallX, clientY: wallY, pointerId: 1 })
+		})
+		unmount()
+
+		// Now switch to ERASE and drag over the wall
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.ERASE)
+		const { getByRole: getByRole2 } = render(<PathfindingVisualizer />)
+		const canvas2 = getByRole2("application")
+
+		vi.spyOn(canvas2, "getBoundingClientRect").mockReturnValue({
+			left: 0,
+			top: 0,
+			width: 1056,
+			height: 576,
+			right: 1056,
+			bottom: 576,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		} as DOMRect)
+
+		const eraseStartX = 2 * cellSize + cellSize / 2
+		const eraseStartY = 3 * cellSize + cellSize / 2
+		const eraseMoveX = 3 * cellSize + cellSize / 2
+		const eraseMoveY = 3 * cellSize + cellSize / 2
+
+		// pointer-down on a different cell to set up drag state
+		await act(async () => {
+			fireEvent.pointerDown(canvas2, { clientX: eraseStartX, clientY: eraseStartY, pointerId: 1 })
+		})
+		const liveAfterDown = document.querySelector("[aria-live='polite']")?.textContent ?? ""
+
+		// drag-move into the wall cell — must NOT update live region
+		await act(async () => {
+			fireEvent.pointerMove(canvas2, { clientX: eraseMoveX, clientY: eraseMoveY, pointerId: 1 })
+		})
+		const liveAfterMove = document.querySelector("[aria-live='polite']")?.textContent ?? ""
+
+		expect(liveAfterMove).toBe(liveAfterDown)
+
+		await act(async () => {
+			fireEvent.pointerUp(canvas2, { clientX: eraseMoveX, clientY: eraseMoveY, pointerId: 1 })
+		})
+	})
+})
