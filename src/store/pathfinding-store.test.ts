@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest"
-import { usePathfindingStore, RUN_STATUS } from "./pathfinding-store"
+import { usePathfindingStore, RUN_STATUS, BRUSH_MODE } from "./pathfinding-store"
 import { ALGORITHM } from "../lib/algorithms/pathfinding/index"
 import { DEFAULT_SPEED } from "../lib/animation/speed-config"
 import { DEFAULT_ROWS, DEFAULT_COLS } from "../lib/grid/grid.types"
@@ -211,7 +211,7 @@ describe("pathfindingStore — paintCell", () => {
 		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.WALL)
 	})
 
-	it("toggles wall back to empty on second call", () => {
+	it("painting a wall cell again stays as wall (set semantics — no toggle back to empty)", () => {
 		const { grid } = usePathfindingStore.getState()
 		let emptyCellIndex = -1
 		for (let i = 0; i < grid.cells.length; i++) {
@@ -223,7 +223,8 @@ describe("pathfindingStore — paintCell", () => {
 		const { r, c } = coords(emptyCellIndex, grid.cols)
 		usePathfindingStore.getState().paintCell(r, c)
 		usePathfindingStore.getState().paintCell(r, c)
-		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.EMPTY)
+		// With set semantics, the cell remains a wall — not toggled back
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.WALL)
 	})
 
 	it("does NOT wall the start cell", () => {
@@ -258,6 +259,87 @@ describe("pathfindingStore — paintCell", () => {
 		usePathfindingStore.getState().paintCell(r, c)
 		// result is new object after recompute
 		expect(usePathfindingStore.getState().result).not.toBe(resultBefore)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// paintCell brush semantics — BUG FIX: WALL=set (idempotent), ERASE=clear (idempotent)
+// ---------------------------------------------------------------------------
+
+describe("pathfindingStore — paintCell WALL brush semantics (idempotent set)", () => {
+	beforeEach(resetStore)
+
+	it("WALL brush: painting an empty cell makes it a wall", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.WALL)
+	})
+
+	it("WALL brush: painting the same cell twice leaves it as a wall (idempotent — no flicker)", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		// Second call — must NOT toggle back to empty
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.WALL)
+	})
+})
+
+describe("pathfindingStore — paintCell ERASE brush semantics (idempotent clear)", () => {
+	beforeEach(resetStore)
+
+	it("ERASE brush: painting a wall cell clears it to empty", () => {
+		// First set a wall with WALL brush
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.WALL)
+
+		// Switch to ERASE and paint the same cell
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.ERASE)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.EMPTY)
+	})
+
+	it("ERASE brush: erasing an already-empty cell is a no-op — single call stays empty", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.ERASE)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		// Single call on an empty cell — must NOT set a wall (toggle would)
+		usePathfindingStore.getState().paintCell(r, c)
+		expect(usePathfindingStore.getState().grid.cells[emptyCellIndex]).toBe(CELL.EMPTY)
 	})
 })
 

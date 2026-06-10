@@ -29,7 +29,7 @@
  */
 
 import { create } from "zustand"
-import { createGrid, placeStart, placeEnd, toggleWall, setWeight } from "../lib/grid/grid"
+import { createGrid, placeStart, placeEnd, setWall, eraseCell, setWeight } from "../lib/grid/grid"
 import { DEFAULT_ROWS, DEFAULT_COLS } from "../lib/grid/grid.types"
 import { ALGORITHM, ALGORITHM_REGISTRY } from "../lib/algorithms/pathfinding/index"
 import type { Algorithm } from "../lib/algorithms/pathfinding/index"
@@ -203,7 +203,14 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 	// ---------------------------------------------------------------------------
 
 	/**
-	 * Toggle a wall on the cell at (row, col).
+	 * Paint the cell at (row, col) using the current brush mode.
+	 *
+	 * - WALL brush: SET wall (idempotent — no-op if already a wall; no flicker on drag)
+	 * - ERASE brush: CLEAR to empty (idempotent — no-op if already empty)
+	 *
+	 * Toggle semantics (toggleWall) are intentionally NOT used here because a
+	 * pointer drag re-enters the same cell multiple times per frame; toggling
+	 * would oscillate the cell between wall and empty on every frame.
 	 *
 	 * @remarks
 	 * Drag batching is the UI layer's responsibility. This action recomputes
@@ -211,8 +218,15 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 	 * (rAF) before invoking, per design §6.
 	 */
 	paintCell(row: number, col: number) {
-		const { grid } = get()
-		const nextGrid = toggleWall(grid, row, col)
+		const { grid, brush } = get()
+		let nextGrid = grid
+		if (brush === BRUSH_MODE.ERASE) {
+			nextGrid = eraseCell(grid, row, col)
+		} else {
+			// Default: WALL brush (set semantics)
+			nextGrid = setWall(grid, row, col)
+		}
+		if (nextGrid === grid) return // no change — skip recompute
 		set({ grid: nextGrid })
 		silentRecompute(set, get)
 	},

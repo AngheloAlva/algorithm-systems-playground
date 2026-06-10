@@ -53,13 +53,21 @@ function makePrng(seed: number): () => number {
  * Bisect a chamber with one wall + one passage.
  *
  * Wall is drawn at a position strictly INSIDE the chamber:
- * - Horizontal wall: wallRow ∈ [r0+1, r1] (so top sub-chamber has ≥1 row)
- *   Sub-chambers: [r0, wallRow-1] and [wallRow, r1].
+ * - Horizontal wall: wallRow ∈ [r0+1, r1-1] so both sub-chambers have ≥1 row.
+ *   Sub-chambers: [r0, wallRow-1] and [wallRow+1, r1].
  *   Passage opens one column in the wall row.
- * - Vertical wall: wallCol ∈ [c0+1, c1] — symmetric.
+ * - Vertical wall: wallCol ∈ [c0+1, c1-1] — symmetric.
+ *
+ * @param open - Flat Uint8Array mask; cells with open[i]=1 are protected from
+ *   being walled. Each passage cell and both of its exit-side neighbours are
+ *   marked open before recursing into sub-chambers. This prevents a later
+ *   sub-division from walling in a parent passage exit, which was the root
+ *   cause of disconnected mazes that forced the ensureReachable fallback to
+ *   carve a corridor along row 0 and the last column.
  */
 function divide(
 	cells: Uint8Array,
+	open: Uint8Array,
 	rows: number,
 	cols: number,
 	r0: number,
@@ -94,10 +102,10 @@ function divide(
 		if (choices < 1) return
 		const wallRow = r0 + 1 + Math.floor(rand() * choices)
 
-		// Wall the entire row within this chamber
+		// Wall the entire row within this chamber, skipping protected cells
 		for (let c = c0; c <= c1; c++) {
 			const i = index(wallRow, c, cols)
-			if (cells[i] !== CELL.START && cells[i] !== CELL.END) {
+			if (cells[i] !== CELL.START && cells[i] !== CELL.END && !open[i]) {
 				cells[i] = CELL.WALL
 			}
 		}
@@ -109,17 +117,24 @@ function divide(
 			cells[pi] = CELL.EMPTY
 		}
 
+		// Protect the passage cell and its two exit neighbours so sub-chamber
+		// walls cannot wall in the passage exit, which would disconnect the maze.
+		open[pi] = 1
+		if (wallRow > 0) open[index(wallRow - 1, passageCol, cols)] = 1
+		if (wallRow < rows - 1) open[index(wallRow + 1, passageCol, cols)] = 1
+
 		// Recurse
-		divide(cells, rows, cols, r0, c0, wallRow - 1, c1, rand)
-		divide(cells, rows, cols, wallRow + 1, c0, r1, c1, rand)
+		divide(cells, open, rows, cols, r0, c0, wallRow - 1, c1, rand)
+		divide(cells, open, rows, cols, wallRow + 1, c0, r1, c1, rand)
 	} else {
 		const choices = width - 2
 		if (choices < 1) return
 		const wallCol = c0 + 1 + Math.floor(rand() * choices)
 
+		// Wall the entire column within this chamber, skipping protected cells
 		for (let r = r0; r <= r1; r++) {
 			const i = index(r, wallCol, cols)
-			if (cells[i] !== CELL.START && cells[i] !== CELL.END) {
+			if (cells[i] !== CELL.START && cells[i] !== CELL.END && !open[i]) {
 				cells[i] = CELL.WALL
 			}
 		}
@@ -130,8 +145,13 @@ function divide(
 			cells[pi] = CELL.EMPTY
 		}
 
-		divide(cells, rows, cols, r0, c0, r1, wallCol - 1, rand)
-		divide(cells, rows, cols, r0, wallCol + 1, r1, c1, rand)
+		// Protect the passage cell and its two exit neighbours
+		open[pi] = 1
+		if (wallCol > 0) open[index(passageRow, wallCol - 1, cols)] = 1
+		if (wallCol < cols - 1) open[index(passageRow, wallCol + 1, cols)] = 1
+
+		divide(cells, open, rows, cols, r0, c0, r1, wallCol - 1, rand)
+		divide(cells, open, rows, cols, r0, wallCol + 1, r1, c1, rand)
 	}
 }
 
@@ -244,8 +264,13 @@ export function generateMaze(rows: number, cols: number, seed: number): Grid {
 	grid = placeStart(grid, 0, 0)
 	grid = placeEnd(grid, rows - 1, cols - 1)
 
+	// Passage-exit protection mask: cells that cannot be walled by sub-divisions
+	const open = new Uint8Array(rows * cols)
+	open[grid.start] = 1
+	open[grid.end] = 1
+
 	// Run recursive division — mutates cells in place
-	divide(grid.cells, rows, cols, 0, 0, rows - 1, cols - 1, rand)
+	divide(grid.cells, open, rows, cols, 0, 0, rows - 1, cols - 1, rand)
 
 	// Defensive: re-assert start/end markers (divide guards them but be safe)
 	grid.cells[grid.start] = CELL.START

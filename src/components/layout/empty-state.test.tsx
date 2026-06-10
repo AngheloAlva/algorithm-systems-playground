@@ -58,10 +58,15 @@ describe("MODULES registry", () => {
     expect(unique.size).toBe(MODULES.length);
   });
 
-  it("all 4 modules are currently coming-soon", () => {
+  it("pathfinding module is available", () => {
+    const pathfinding = MODULES.find((m) => m.slug === "pathfinding");
+    expect(pathfinding?.status).toBe(MODULE_STATUS.AVAILABLE);
+  });
+
+  it("remaining 3 modules are coming-soon", () => {
     const comingSoon = MODULES.filter(
       (m) => m.status === MODULE_STATUS.COMING_SOON
     );
-    expect(comingSoon).toHaveLength(4);
+    expect(comingSoon).toHaveLength(3);
   });
 });

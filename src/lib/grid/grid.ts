@@ -110,6 +110,36 @@ export function toggleWall(g: Grid, row: number, col: number): Grid {
 }
 
 /**
+ * Set (row, col) to WALL unconditionally (set semantics — idempotent).
+ * No-op if the cell is the start or end cell, or already a wall.
+ */
+export function setWall(g: Grid, row: number, col: number): Grid {
+	const i = index(row, col, g.cols)
+	const kind = g.cells[i]
+	if (kind === CELL.START || kind === CELL.END || kind === CELL.WALL) {
+		return g
+	}
+	const next = cloneGrid(g)
+	next.cells[i] = CELL.WALL
+	return next
+}
+
+/**
+ * Clear (row, col) to EMPTY unconditionally (erase semantics — idempotent).
+ * No-op if the cell is the start or end cell, or already empty.
+ */
+export function eraseCell(g: Grid, row: number, col: number): Grid {
+	const i = index(row, col, g.cols)
+	const kind = g.cells[i]
+	if (kind === CELL.START || kind === CELL.END || kind === CELL.EMPTY) {
+		return g
+	}
+	const next = cloneGrid(g)
+	next.cells[i] = CELL.EMPTY
+	return next
+}
+
+/**
  * Set the traversal weight of (row, col), clamped to [1, MAX_WEIGHT].
  * No-op if the cell is a wall (walls are impassable; weight is irrelevant).
  */
