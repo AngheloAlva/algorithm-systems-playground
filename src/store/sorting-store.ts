@@ -30,7 +30,7 @@ import { RunStatus, RUN_STATUS } from "./pathfinding-store"
 import { SORT_ALGORITHM, SORT_ALGORITHM_REGISTRY } from "../lib/algorithms/sorting/index"
 import type { SortAlgorithm } from "../lib/algorithms/sorting/index"
 import type { SortTraceResult } from "../lib/algorithms/sorting/types"
-import { generateArray as genArray, ARRAY_MODE, MIN_ARRAY_LENGTH, MAX_ARRAY_LENGTH } from "../lib/algorithms/sorting/array-gen"
+import { generateArray as genArray, MIN_ARRAY_LENGTH, MAX_ARRAY_LENGTH } from "../lib/algorithms/sorting/array-gen"
 import type { ArrayMode } from "../lib/algorithms/sorting/array-gen"
 import { DEFAULT_SPEED } from "../lib/animation/speed-config"
 import { SORTING_DEFAULTS } from "../lib/url-state/sorting-codec"
@@ -39,7 +39,8 @@ import { SORTING_DEFAULTS } from "../lib/url-state/sorting-codec"
 // Re-export RunStatus for convenience (callers can import from either store)
 // ---------------------------------------------------------------------------
 
-export { RunStatus, RUN_STATUS } from "./pathfinding-store"
+export type { RunStatus } from "./pathfinding-store"
+export { RUN_STATUS } from "./pathfinding-store"
 
 // ---------------------------------------------------------------------------
 // SortingRunStatus alias — same const, different semantic name for clarity

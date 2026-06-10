@@ -36,7 +36,7 @@ import {
 	selectSortingActiveLine,
 	selectSortingMetrics,
 } from "@/store/sorting-store"
-import { SORT_ALGORITHM, SORT_ALGORITHM_REGISTRY } from "@/lib/algorithms/sorting/index"
+import { SORT_ALGORITHM_REGISTRY } from "@/lib/algorithms/sorting/index"
 import type { SortAlgorithm } from "@/lib/algorithms/sorting/index"
 import { ARRAY_MODE, MIN_ARRAY_LENGTH, MAX_ARRAY_LENGTH } from "@/lib/algorithms/sorting/array-gen"
 import type { ArrayMode } from "@/lib/algorithms/sorting/array-gen"
@@ -221,6 +221,7 @@ export function SortingVisualizer() {
 			metrics !== null
 		) {
 			const algoLabel = SORT_ALGORITHM_REGISTRY[algorithm].label
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setLiveText(
 				`${algoLabel} completed. ${metrics.comparisons} comparisons, ${metrics.swaps} swaps.`
 			)
