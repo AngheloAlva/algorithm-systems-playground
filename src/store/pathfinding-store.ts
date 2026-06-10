@@ -48,6 +48,8 @@ export const RUN_STATUS = {
 	RUNNING: "running",
 	PAUSED: "paused",
 	DONE: "done",
+	/** Graph algorithms that require a start node but none has been selected. */
+	NO_START_NODE: "no-start-node",
 } as const
 
 export type RunStatus = (typeof RUN_STATUS)[keyof typeof RUN_STATUS]
