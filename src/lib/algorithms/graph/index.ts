@@ -14,6 +14,7 @@
 import type { GraphAlgorithmFn } from "../../graph/types"
 import { runBFS, BFS_PSEUDOCODE } from "./bfs"
 import { runDFS, DFS_PSEUDOCODE } from "./dfs"
+import { runCycleDetection, CYCLE_DETECTION_PSEUDOCODE } from "./cycle-detection"
 
 // ---------------------------------------------------------------------------
 // Algorithm slug — const-type pattern (typescript SKILL)
@@ -22,6 +23,7 @@ import { runDFS, DFS_PSEUDOCODE } from "./dfs"
 export const GRAPH_ALGORITHM = {
 	BFS: "bfs",
 	DFS: "dfs",
+	CYCLE: "cycle",
 } as const
 
 export type GraphAlgorithm = (typeof GRAPH_ALGORITHM)[keyof typeof GRAPH_ALGORITHM]
@@ -56,5 +58,12 @@ export const GRAPH_ALGORITHM_REGISTRY: Record<string, GraphAlgorithmEntry> = {
 		run: runDFS,
 		pseudocode: DFS_PSEUDOCODE,
 		requiresStartNode: true,
+	},
+	[GRAPH_ALGORITHM.CYCLE]: {
+		id: GRAPH_ALGORITHM.CYCLE,
+		label: "Cycle Detection",
+		run: runCycleDetection,
+		pseudocode: [...CYCLE_DETECTION_PSEUDOCODE],
+		requiresStartNode: false,
 	},
 }
