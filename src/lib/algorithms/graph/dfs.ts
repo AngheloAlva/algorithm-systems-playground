@@ -39,6 +39,10 @@ export const DFS_PSEUDOCODE = [
  * @returns GraphTraceResult with frontier/visit steps and metrics.
  */
 export function runDFS(graph: GraphData, startId: string): GraphTraceResult {
+	if (!graph.nodes.has(startId)) {
+		return { steps: [], metrics: { visitedCount: 0, traversalOrder: [] } }
+	}
+
 	const steps: GraphStep[] = []
 	const visited = new Set<string>()
 	const traversalOrder: string[] = []
@@ -46,6 +50,8 @@ export function runDFS(graph: GraphData, startId: string): GraphTraceResult {
 	const adj = buildAdjacency(graph)
 
 	const stack: string[] = [startId]
+	const frontierEmitted = new Set<string>()
+	frontierEmitted.add(startId)
 	steps.push({ kind: "frontier", nodeId: startId, line: 1 })
 
 	while (stack.length > 0) {
@@ -64,7 +70,10 @@ export function runDFS(graph: GraphData, startId: string): GraphTraceResult {
 			const { to } = neighbors[i]
 			if (!visited.has(to)) {
 				stack.push(to)
-				steps.push({ kind: "frontier", nodeId: to, line: 7 })
+				if (!frontierEmitted.has(to)) {
+					frontierEmitted.add(to)
+					steps.push({ kind: "frontier", nodeId: to, line: 7 })
+				}
 			}
 		}
 	}

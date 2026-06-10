@@ -133,16 +133,8 @@ export interface GraphTraceResult {
 // Algorithm function contract
 // ---------------------------------------------------------------------------
 
-/** Options passed to graph algorithm runners. */
-export interface GraphAlgorithmOptions {
-	startId: string | null
-}
-
 /** Canonical graph algorithm signature — pure and deterministic. */
-export type GraphAlgorithmFn = (
-	graph: GraphData,
-	options: GraphAlgorithmOptions
-) => GraphTraceResult
+export type GraphAlgorithmFn = (graph: GraphData, startId: string) => GraphTraceResult
 
 // ---------------------------------------------------------------------------
 // Pseudocode line (mirrors pathfinding PseudoLine)

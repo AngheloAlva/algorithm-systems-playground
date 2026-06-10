@@ -76,6 +76,65 @@ describe("runDFS (G5-C)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// G5-D — DFS with absent startId
+// ---------------------------------------------------------------------------
+
+describe("runDFS (G5-D)", () => {
+	it("returns empty trace and zeroed metrics when startId is not in the graph", () => {
+		const { graph: g2, ids } = buildNodes(2)
+		const { graph: g } = addEdge(g2, ids[0], ids[1])!
+		const result = runDFS(g, "does-not-exist")
+
+		expect(result.steps).toHaveLength(0)
+		expect(result.metrics.visitedCount).toBe(0)
+		expect(result.metrics.traversalOrder).toHaveLength(0)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// G5-E — DFS duplicate frontier steps in cyclic graphs
+// ---------------------------------------------------------------------------
+
+describe("runDFS (G5-E)", () => {
+	it("emits at most one frontier step per node in a cyclic graph (triangle A-B-C)", () => {
+		const { graph: g3, ids } = buildNodes(3)
+		const r1 = addEdge(g3, ids[0], ids[1])!
+		const r2 = addEdge(r1.graph, ids[1], ids[2])!
+		const { graph: g } = addEdge(r2.graph, ids[2], ids[0])! // cycle back to A
+
+		const result = runDFS(g, ids[0])
+
+		const frontierSteps = result.steps.filter((s) => s.kind === "frontier")
+		const nodeIds = frontierSteps.map((s) => ("nodeId" in s ? s.nodeId : undefined))
+		const uniqueNodeIds = new Set(nodeIds)
+
+		// At most one frontier step per node
+		expect(nodeIds.length).toBe(uniqueNodeIds.size)
+	})
+
+	it("frontier step for a node always appears before its visit step in a cyclic graph", () => {
+		const { graph: g3, ids } = buildNodes(3)
+		const r1 = addEdge(g3, ids[0], ids[1])!
+		const r2 = addEdge(r1.graph, ids[1], ids[2])!
+		const { graph: g } = addEdge(r2.graph, ids[2], ids[0])!
+
+		const result = runDFS(g, ids[0])
+
+		for (const nodeId of [ids[0], ids[1], ids[2]]) {
+			const frontierIdx = result.steps.findIndex(
+				(s) => s.kind === "frontier" && "nodeId" in s && s.nodeId === nodeId
+			)
+			const visitIdx = result.steps.findIndex(
+				(s) => s.kind === "visit" && "nodeId" in s && s.nodeId === nodeId
+			)
+			expect(frontierIdx).toBeGreaterThanOrEqual(0)
+			expect(visitIdx).toBeGreaterThanOrEqual(0)
+			expect(frontierIdx).toBeLessThan(visitIdx)
+		}
+	})
+})
+
+// ---------------------------------------------------------------------------
 // Stack-based iterative with reverse-push convention
 // ---------------------------------------------------------------------------
 

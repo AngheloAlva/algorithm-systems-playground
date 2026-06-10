@@ -11,7 +11,7 @@
  * ## No React / DOM imports
  */
 
-import type { GraphData, GraphTraceResult } from "../../graph/types"
+import type { GraphAlgorithmFn } from "../../graph/types"
 import { runBFS, BFS_PSEUDOCODE } from "./bfs"
 import { runDFS, DFS_PSEUDOCODE } from "./dfs"
 
@@ -33,7 +33,7 @@ export type GraphAlgorithm = (typeof GRAPH_ALGORITHM)[keyof typeof GRAPH_ALGORIT
 export interface GraphAlgorithmEntry {
 	id: string
 	label: string
-	run: (graph: GraphData, startId: string) => GraphTraceResult
+	run: GraphAlgorithmFn
 	pseudocode: string[]
 	requiresStartNode: boolean
 }

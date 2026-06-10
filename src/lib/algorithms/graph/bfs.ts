@@ -37,6 +37,10 @@ export const BFS_PSEUDOCODE = [
  * @returns GraphTraceResult with frontier/visit steps and metrics.
  */
 export function runBFS(graph: GraphData, startId: string): GraphTraceResult {
+	if (!graph.nodes.has(startId)) {
+		return { steps: [], metrics: { visitedCount: 0, traversalOrder: [] } }
+	}
+
 	const steps: GraphStep[] = []
 	const visited = new Set<string>()
 	const traversalOrder: string[] = []

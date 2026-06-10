@@ -121,6 +121,21 @@ describe("runBFS (G4-D)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// G4-E — BFS with absent startId
+// ---------------------------------------------------------------------------
+
+describe("runBFS (G4-E)", () => {
+	it("returns empty trace and zeroed metrics when startId is not in the graph", () => {
+		const { g } = buildLinearGraph()
+		const result = runBFS(g, "does-not-exist")
+
+		expect(result.steps).toHaveLength(0)
+		expect(result.metrics.visitedCount).toBe(0)
+		expect(result.metrics.traversalOrder).toHaveLength(0)
+	})
+})
+
+// ---------------------------------------------------------------------------
 // step.line validity
 // ---------------------------------------------------------------------------
 
