@@ -133,6 +133,22 @@ describe("Map reactivity invariant", () => {
 		const g1 = toggleDirected(g0)
 		expect(g1).not.toBe(g0)
 	})
+
+	it("removeEdge returns new GraphData and new edges Map", () => {
+		const { graph: g2, ids } = buildNodes(2)
+		const { graph: g3, edgeId: e1 } = addEdge(g2, ids[0], ids[1])!
+		const g4 = removeEdge(g3, e1)
+		expect(g4).not.toBe(g3)
+		expect(g4.edges).not.toBe(g3.edges)
+	})
+
+	it("setEdgeWeight returns new GraphData and new edges Map", () => {
+		const { graph: g2, ids } = buildNodes(2)
+		const { graph: g3, edgeId: e1 } = addEdge(g2, ids[0], ids[1])!
+		const g4 = setEdgeWeight(g3, e1, 7)
+		expect(g4).not.toBe(g3)
+		expect(g4.edges).not.toBe(g3.edges)
+	})
 })
 
 // ---------------------------------------------------------------------------
@@ -400,5 +416,19 @@ describe("clearGraph", () => {
 		expect(g.nodes.size).toBe(0)
 		expect(g.edges.size).toBe(0)
 		expect(g.directed).toBe(false)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// G1-B — Node ids are never recycled after deletion
+// ---------------------------------------------------------------------------
+
+describe("addNode stable id after delete (G1-B)", () => {
+	it("new node id is not equal to a previously deleted node id", () => {
+		const g0 = clearGraph()
+		const { graph: g1, nodeId: deletedId } = addNode(g0, 0, 0, 0)
+		const g2 = removeNode(g1, deletedId)
+		const { nodeId: newId } = addNode(g2, 50, 50, 1)
+		expect(newId).not.toBe(deletedId)
 	})
 })
