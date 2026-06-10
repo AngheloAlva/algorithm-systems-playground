@@ -46,7 +46,7 @@ export const MODULES: Module[] = [
     title: "Pathfinding",
     description:
       "Visualize A*, Dijkstra, BFS, and DFS on interactive grid mazes.",
-    status: MODULE_STATUS.COMING_SOON,
+    status: MODULE_STATUS.AVAILABLE,
     icon: RouteIcon,
   },
   {
