@@ -74,7 +74,8 @@ function findEdgeId(graph: GraphData, fromId: string, toId: string): string | un
  * @param _startId - Ignored; all nodes are visited (requiresStartNode: false).
  * @returns GraphTraceResult with tree-edge/back-edge steps and cycle metrics.
  */
-export function runCycleDetection(graph: GraphData, _startId: string): GraphTraceResult {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function runCycleDetection(graph: GraphData, startId: string): GraphTraceResult {
 	if (graph.nodes.size === 0) {
 		return {
 			steps: [],

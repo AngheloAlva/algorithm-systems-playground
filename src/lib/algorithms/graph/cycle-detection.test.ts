@@ -55,7 +55,7 @@ function buildDirected(edgeList: Array<[number, number]>, nodeCount: number) {
 describe("runCycleDetection (G13-A) — undirected cycle", () => {
 	it("detects a cycle in an undirected triangle A-B-C", () => {
 		// A—B, B—C, C—A
-		const { graph, ids } = buildUndirected([[0, 1], [1, 2], [2, 0]], 3)
+		const { graph } = buildUndirected([[0, 1], [1, 2], [2, 0]], 3)
 		const result = runCycleDetection(graph, "")
 
 		const backEdgeSteps = result.steps.filter((s) => s.kind === "back-edge")
@@ -95,7 +95,7 @@ describe("runCycleDetection (G13-B) — undirected tree", () => {
 describe("runCycleDetection (G13-C) — directed cycle", () => {
 	it("detects a directed cycle A→B→C→A", () => {
 		// 3 nodes: A=0, B=1, C=2 ; edges: A→B, B→C, C→A
-		const { graph, ids } = buildDirected([[0, 1], [1, 2], [2, 0]], 3)
+		const { graph, ids: [idA] } = buildDirected([[0, 1], [1, 2], [2, 0]], 3)
 		const result = runCycleDetection(graph, "")
 
 		const backEdgeSteps = result.steps.filter((s) => s.kind === "back-edge")
@@ -105,7 +105,7 @@ describe("runCycleDetection (G13-C) — directed cycle", () => {
 		// The back-edge should be from C to A (the edge that closes the cycle)
 		const cycleClosingEdge = backEdgeSteps.find((s) => {
 			const bes = s as BackEdgeStep
-			return bes.toId === ids[0] // to node A
+			return bes.toId === idA // to node A
 		})
 		expect(cycleClosingEdge).toBeDefined()
 	})
