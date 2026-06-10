@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { SortingVisualizer } from "@/components/sorting/SortingVisualizer"
 
 import {
 	PlayIcon,
@@ -495,8 +496,8 @@ export function PathfindingVisualizer() {
 			{/* Tab switcher */}
 			<TabsList aria-label="Algorithm visualizer tabs">
 				<TabsTrigger value="pathfinding">Pathfinding</TabsTrigger>
-				<TabsTrigger value="sorting" disabled aria-disabled="true" title="Coming soon">
-					Sorting (coming soon)
+				<TabsTrigger value="sorting">
+					Sorting
 				</TabsTrigger>
 			</TabsList>
 
@@ -704,11 +705,9 @@ export function PathfindingVisualizer() {
 				</div>
 			</TabsContent>
 
-			{/* Sorting tab — placeholder (coming soon) */}
+			{/* Sorting tab */}
 			<TabsContent value="sorting">
-				<div className="text-muted-foreground flex min-h-48 items-center justify-center text-sm">
-					Sorting visualizer coming soon.
-				</div>
+				<SortingVisualizer />
 			</TabsContent>
 		</Tabs>
 	)
