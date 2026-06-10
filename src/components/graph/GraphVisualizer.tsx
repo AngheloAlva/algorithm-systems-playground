@@ -141,14 +141,14 @@ export function GraphVisualizer() {
 	const metrics = useGraphStore(selectGraphMetrics)
 
 	// -------------------------------------------------------------------------
-	// URL sync — read on mount, write on config change
+	// URL sync — read once on mount, write explicitly from change handlers
 	// -------------------------------------------------------------------------
 
-	const isFirstMount = useRef(true)
+	const urlSyncedRef = useRef(false)
 
 	useEffect(() => {
-		if (!isFirstMount.current) return
-		isFirstMount.current = false
+		if (urlSyncedRef.current) return
+		urlSyncedRef.current = true
 		const decoded = graphCodec.decode(searchParams)
 		if (decoded.algorithm && GRAPH_ALGORITHM_REGISTRY[decoded.algorithm]) {
 			setAlgorithm(decoded.algorithm as GraphAlgorithm)
@@ -156,14 +156,21 @@ export function GraphVisualizer() {
 		if (decoded.speed) {
 			setSpeed(decoded.speed)
 		}
-	}, [searchParams, setAlgorithm, setSpeed])
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
 
-	useEffect(() => {
-		if (isFirstMount.current) return
-		const encoded = graphCodec.encode({ algorithm, speed })
-		const qs = encoded.toString()
-		router.replace(qs ? `?${qs}` : "?", { scroll: false })
-	}, [algorithm, speed, router])
+	const syncUrl = useCallback(
+		(overrides?: { algorithm?: GraphAlgorithm; speed?: number }) => {
+			const current = {
+				algorithm: overrides?.algorithm ?? algorithm,
+				speed: overrides?.speed ?? speed,
+			}
+			const params = graphCodec.encode(current)
+			const qs = params.toString()
+			router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false })
+		},
+		[algorithm, speed, router]
+	)
 
 	// -------------------------------------------------------------------------
 	// Playback — useStepPlayer (mirrors SortingVisualizer)
@@ -233,12 +240,16 @@ export function GraphVisualizer() {
 	const handleAlgorithmChange = useCallback(
 		(alg: string | null) => {
 			if (!alg) return
-			setAlgorithm(alg as GraphAlgorithm)
+			const next = alg as GraphAlgorithm
+			setAlgorithm(next)
 			reset()
 			setStatus(RUN_STATUS.IDLE)
 			setCursor(0)
+			// Clear stale trace from the previous algorithm
+			useGraphStore.setState({ result: null })
+			syncUrl({ algorithm: next })
 		},
-		[setAlgorithm, reset, setStatus, setCursor]
+		[setAlgorithm, reset, setStatus, setCursor, syncUrl]
 	)
 
 	// -------------------------------------------------------------------------
@@ -395,7 +406,7 @@ export function GraphVisualizer() {
 								max={MAX_SPEED}
 								step={1}
 								value={[speed]}
-								onValueChange={(vals) => { const v = Array.isArray(vals) ? vals[0] : vals; setSpeed(v as number) }}
+								onValueChange={(vals) => { const v = Array.isArray(vals) ? vals[0] : vals; const n = v as number; setSpeed(n); syncUrl({ speed: n }) }}
 								aria-label="Playback speed"
 								className="w-full"
 							/>
@@ -453,7 +464,7 @@ export function GraphVisualizer() {
 											? "bg-primary/15 text-foreground font-semibold"
 											: "text-muted-foreground"
 									}`}
-									aria-current={activeLine === idx ? "true" : undefined}
+									aria-current={activeLine === idx ? "step" : undefined}
 								>
 									{line}
 								</li>
