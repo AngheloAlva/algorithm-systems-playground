@@ -457,6 +457,12 @@ export function GraphVisualizer() {
 										<dd className="font-medium">{metrics.cycleDetected ? "Yes" : "No"}</dd>
 									</>
 								)}
+								{metrics.backEdgeCount !== undefined && (
+									<>
+										<dt className="text-muted-foreground text-xs">Back edges</dt>
+										<dd className="font-medium">{metrics.backEdgeCount}</dd>
+									</>
+								)}
 							</dl>
 						) : (
 							<p className="text-muted-foreground text-xs">Run an algorithm to see metrics.</p>
