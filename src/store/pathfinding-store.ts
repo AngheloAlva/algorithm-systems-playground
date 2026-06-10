@@ -30,6 +30,7 @@
 
 import { create } from "zustand"
 import { createGrid, placeStart, placeEnd, setWall, eraseCell, setWeight } from "../lib/grid/grid"
+import { cycleWeight } from "../lib/grid/cycle-weight"
 import { DEFAULT_ROWS, DEFAULT_COLS } from "../lib/grid/grid.types"
 import { ALGORITHM, ALGORITHM_REGISTRY } from "../lib/algorithms/pathfinding/index"
 import type { Algorithm } from "../lib/algorithms/pathfinding/index"
@@ -101,6 +102,8 @@ export interface PathfindingState {
 	// Actions — grid mutations
 	paintCell: (row: number, col: number) => void
 	setCellWeight: (row: number, col: number, weight: number) => void
+	/** Cycle the weight of (row, col) through [1→2→3→4→5→1]. Used by the keyboard W key. */
+	cycleWeightAt: (row: number, col: number) => void
 	dragEndpoint: (endpoint: "start" | "end", row: number, col: number) => void
 	generateMaze: (seed: number) => void
 	resetGrid: () => void
@@ -205,12 +208,16 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 	/**
 	 * Paint the cell at (row, col) using the current brush mode.
 	 *
-	 * - WALL brush: SET wall (idempotent — no-op if already a wall; no flicker on drag)
-	 * - ERASE brush: CLEAR to empty (idempotent — no-op if already empty)
+	 * - WALL brush:   SET wall (idempotent — no-op if already a wall; no flicker on drag)
+	 * - ERASE brush:  CLEAR to empty (idempotent — no-op if already empty)
+	 * - WEIGHT brush: CYCLE weight [1->2->3->4->5->1] (intentionally NON-idempotent --
+	 *                 each call advances the weight by one tier regardless of the
+	 *                 previous value; callers must deduplicate if repeated calls per
+	 *                 cell are undesirable)
 	 *
-	 * Toggle semantics (toggleWall) are intentionally NOT used here because a
-	 * pointer drag re-enters the same cell multiple times per frame; toggling
-	 * would oscillate the cell between wall and empty on every frame.
+	 * Toggle semantics (toggleWall) are intentionally NOT used for WALL/ERASE because
+	 * a pointer drag re-enters the same cell multiple times per frame; toggling would
+	 * oscillate the cell between wall and empty on every frame.
 	 *
 	 * @remarks
 	 * Drag batching is the UI layer's responsibility. This action recomputes
@@ -222,6 +229,9 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 		let nextGrid = grid
 		if (brush === BRUSH_MODE.ERASE) {
 			nextGrid = eraseCell(grid, row, col)
+		} else if (brush === BRUSH_MODE.WEIGHT) {
+			// Cycle weight [1→2→3→4→5→1] on each tap; no-op on walls/start/end
+			nextGrid = cycleWeight(grid, row, col)
 		} else {
 			// Default: WALL brush (set semantics)
 			nextGrid = setWall(grid, row, col)
@@ -234,6 +244,14 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 	setCellWeight(row: number, col: number, weight: number) {
 		const { grid } = get()
 		const nextGrid = setWeight(grid, row, col, weight)
+		set({ grid: nextGrid })
+		silentRecompute(set, get)
+	},
+
+	cycleWeightAt(row: number, col: number) {
+		const { grid } = get()
+		const nextGrid = cycleWeight(grid, row, col)
+		if (nextGrid === grid) return // no-op (wall or special cell)
 		set({ grid: nextGrid })
 		silentRecompute(set, get)
 	},

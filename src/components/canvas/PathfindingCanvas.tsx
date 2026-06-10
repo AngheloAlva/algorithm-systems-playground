@@ -21,11 +21,12 @@
  * @see design §4, D5, D12
  */
 
-import { useRef, useEffect, useCallback, useState } from "react"
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from "react"
 import { CanvasLayer } from "./CanvasLayer"
 import { cellAt } from "@/lib/grid/hit-test"
 import { CELL, type Grid } from "@/lib/grid/grid.types"
 import { STEP, type Step } from "@/lib/algorithms/pathfinding/types"
+import { index as cellIndex } from "@/lib/grid/grid"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,6 +45,8 @@ interface VizTokens {
 	path: string
 	gridLine: string
 	weight: WeightTokens
+	/** Keyboard cursor dashed-border color. Distinct in light AND dark themes. */
+	keyCursor: string
 }
 
 export interface PathfindingCanvasProps {
@@ -55,12 +58,27 @@ export interface PathfindingCanvasProps {
 	cursor: number
 	/** CSS pixels for each grid cell (determines canvas layout). */
 	cellSize?: number
-	/** Called when the user clicks/drags to toggle a wall. */
-	onCellClick?: (cellIndex: number) => void
+	/**
+	 * Called when the user clicks/drags to paint/erase a cell.
+	 * `isPointerDown` is true only on the initial pointerdown event (not on move),
+	 * and ALSO when the keyboard Space key fires (keyboard actions are discrete).
+	 * Returns a post-mutation announcement string (e.g. "wall", "empty",
+	 * "weight 3") when called from the keyboard Space path; the canvas uses it
+	 * to announce the actual post-edit state to screen readers.
+	 * Returns undefined for pointer drag paths (no announcement needed).
+	 */
+	onCellClick?: (cellIndex: number, isPointerDown?: boolean) => string | undefined
 	/** Called when the user drags the start endpoint to a new cell. */
 	onStartDrag?: (cellIndex: number) => void
 	/** Called when the user drags the end endpoint to a new cell. */
 	onEndDrag?: (cellIndex: number) => void
+	/**
+	 * Called when the keyboard W key is pressed at the cursor position.
+	 * Returns a post-mutation announcement string (e.g. "weight 2", "empty")
+	 * derived from the store grid after the mutation, for screen-reader
+	 * announcement. Returns undefined for paths that are no-ops.
+	 */
+	onWeightCycle?: (cellIndex: number) => string | undefined
 	/** Extra className on the container div. */
 	className?: string
 }
@@ -91,6 +109,7 @@ function readVizTokens(el: HTMLElement): VizTokens {
 			get("--viz-weight-4"),
 			get("--viz-weight-5"),
 		],
+		keyCursor: get("--viz-key-cursor"),
 	}
 }
 
@@ -198,6 +217,28 @@ function drawDynamicLayer(
 	}
 }
 
+/**
+ * Draw a keyboard cursor indicator at (row, col).
+ * Color is read from the --viz-key-cursor semantic token so it is visible
+ * on both light and dark themes (FIX 3 -- no hardcoded rgba value).
+ */
+function drawKeyCursor(
+	ctx: CanvasRenderingContext2D,
+	row: number,
+	col: number,
+	cellSize: number,
+	tokens: VizTokens
+) {
+	const x = col * cellSize
+	const y = row * cellSize
+	ctx.save()
+	ctx.strokeStyle = tokens.keyCursor
+	ctx.lineWidth = 2
+	ctx.setLineDash([3, 3])
+	ctx.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2)
+	ctx.restore()
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -210,6 +251,7 @@ export function PathfindingCanvas({
 	onCellClick,
 	onStartDrag,
 	onEndDrag,
+	onWeightCycle,
 	className,
 }: PathfindingCanvasProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -221,6 +263,26 @@ export function PathfindingCanvas({
 
 	// Track pointer drag state
 	const isDraggingRef = useRef<"start" | "end" | "wall" | null>(null)
+
+	// FIX 7 — track focus so keyboard cursor is only drawn when the container
+	// has keyboard focus (hidden for mouse-only users).
+	const [hasFocus, setHasFocus] = useState(false)
+
+	// ---------------------------------------------------------------------------
+	// Keyboard cursor state — row/col position of the keyboard focus cell
+	//
+	// FIX 1: Cursor position is stored in a ref AND mirrored to state.
+	// Arrow handlers update the ref FIRST (synchronously), then mirror to state
+	// for a repaint. Space/W read from the ref — never from closed-over state —
+	// so an arrow press followed immediately by Space/W operates on the already-
+	// moved cell, not the previous cell captured at useCallback creation.
+	// ---------------------------------------------------------------------------
+	/** Single state object so a grid-dimension reset is one setState call (avoids cascading-render lint rule). */
+	const [keyCursorPos, setKeyCursorPos] = useState({ row: 0, col: 0 })
+	const keyCursorRef = useRef({ row: 0, col: 0 })
+
+	// FIX 5: text announced by the aria-live region on keyboard moves and edits
+	const [liveRegionText, setLiveRegionText] = useState("")
 
 	// Read (or re-read) tokens from the container element
 	const getTokens = useCallback((): VizTokens => {
@@ -237,6 +299,7 @@ export function PathfindingCanvas({
 				path: "#6366f1",
 				gridLine: "#e5e7eb",
 				weight: ["#fef9c3", "#fef08a", "#fde047", "#facc15"],
+				keyCursor: "#111",
 			}
 		}
 		const tokens = readVizTokens(el)
@@ -261,10 +324,27 @@ export function PathfindingCanvas({
 		(ctx: CanvasRenderingContext2D) => {
 			const tokens = tokensRef.current ?? getTokens()
 			drawDynamicLayer(ctx, grid, trace, cursor, cellSize, tokens)
+			// FIX 7: Only draw keyboard cursor when the container has focus.
+			// Hiding it when unfocused prevents confusing mouse-only users who
+			// never move the keyboard cursor.
+			if (hasFocus) {
+				drawKeyCursor(ctx, keyCursorPos.row, keyCursorPos.col, cellSize, tokens)
+			}
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[grid, trace, cursor, cellSize, getTokens, themeVersion]
+		[grid, trace, cursor, cellSize, getTokens, themeVersion, keyCursorPos, hasFocus]
 	)
+
+	// FIX 4 — Reset keyboard cursor when grid dimensions change (maze gen / reset).
+	// Without this, the cursor can sit out-of-bounds after a smaller grid is loaded.
+	// useLayoutEffect fires synchronously after DOM mutations; it is the correct
+	// hook for resets that must be visible before the next paint.
+	useLayoutEffect(() => {
+		const origin = { row: 0, col: 0 }
+		keyCursorRef.current = origin
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setKeyCursorPos(origin)
+	}, [grid.rows, grid.cols])
 
 	// Subscribe to theme changes (next-themes toggles .dark on <html>)
 	useEffect(() => {
@@ -305,10 +385,17 @@ export function PathfindingCanvas({
 				isDraggingRef.current = "end"
 			} else {
 				isDraggingRef.current = "wall"
-				onCellClick?.(cellIndex)
+				const desc = onCellClick?.(cellIndex, true)
+				// Provide live-region feedback for pointer-based assistive-tech users.
+				// Uses the same "Row N, column M: {desc}" format as keyboard paths.
+				if (desc !== undefined) {
+					const row = Math.floor(cellIndex / grid.cols)
+					const col = cellIndex % grid.cols
+					setLiveRegionText(`Row ${row + 1}, column ${col + 1}: ${desc}`)
+				}
 			}
 		},
-		[getCellFromEvent, grid.cells, onCellClick]
+		[getCellFromEvent, grid.cells, grid.cols, onCellClick]
 	)
 
 	const handlePointerMove = useCallback(
@@ -337,6 +424,110 @@ export function PathfindingCanvas({
 	}, [])
 
 	// ---------------------------------------------------------------------------
+	// Keyboard handler — arrow key cursor navigation + Space/W interaction
+	// ---------------------------------------------------------------------------
+
+	/**
+	 * Build a screen-reader announcement string for the current cursor position.
+	 * Called after every arrow move and after Space/W edits (FIX 5).
+	 */
+	const announceCell = useCallback(
+		(row: number, col: number) => {
+			const { cols, cells, weights, start, end } = grid
+			const i = cellIndex(row, col, cols)
+			let cellDesc: string
+			if (i === start) {
+				cellDesc = "start"
+			} else if (i === end) {
+				cellDesc = "end"
+			} else if (cells[i] === CELL.WALL) {
+				cellDesc = "wall"
+			} else {
+				const w = weights[i]
+				cellDesc = w > 1 ? `weight ${w}` : "empty"
+			}
+			setLiveRegionText(`Row ${row + 1}, column ${col + 1}: ${cellDesc}`)
+		},
+		[grid]
+	)
+
+	const handleKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLDivElement>) => {
+			const { rows, cols } = grid
+			switch (e.key) {
+				case "ArrowUp": {
+					e.preventDefault()
+					const nextRow = Math.max(0, keyCursorRef.current.row - 1)
+					keyCursorRef.current.row = nextRow
+					setKeyCursorPos((p) => ({ ...p, row: nextRow }))
+					announceCell(nextRow, keyCursorRef.current.col)
+					break
+				}
+				case "ArrowDown": {
+					e.preventDefault()
+					const nextRow = Math.min(rows - 1, keyCursorRef.current.row + 1)
+					keyCursorRef.current.row = nextRow
+					setKeyCursorPos((p) => ({ ...p, row: nextRow }))
+					announceCell(nextRow, keyCursorRef.current.col)
+					break
+				}
+				case "ArrowLeft": {
+					e.preventDefault()
+					const nextCol = Math.max(0, keyCursorRef.current.col - 1)
+					keyCursorRef.current.col = nextCol
+					setKeyCursorPos((p) => ({ ...p, col: nextCol }))
+					announceCell(keyCursorRef.current.row, nextCol)
+					break
+				}
+				case "ArrowRight": {
+					e.preventDefault()
+					const nextCol = Math.min(cols - 1, keyCursorRef.current.col + 1)
+					keyCursorRef.current.col = nextCol
+					setKeyCursorPos((p) => ({ ...p, col: nextCol }))
+					announceCell(keyCursorRef.current.row, nextCol)
+					break
+				}
+				case " ": {
+					e.preventDefault()
+					// Read from ref — always reflects the most recent arrow move even if
+					// the state update has not propagated yet (FIX 1 stale closure).
+					// Pass isPointerDown: true so keyboard Space is treated as a discrete
+					// action — resets the pointer dedupe ref so WEIGHT brush advances even
+					// if this cell was the last one painted by pointer (FIX 2).
+					const spaceRow = keyCursorRef.current.row
+					const spaceCol = keyCursorRef.current.col
+					const spaceIdx = cellIndex(spaceRow, spaceCol, cols)
+					const spaceDesc = onCellClick?.(spaceIdx, true)
+					// Announce ACTUAL post-mutation state returned by the handler.
+					// Handler derives the text from the store grid after mutation —
+					// no prediction here, no duplicated brush semantics (FIX 1).
+					if (spaceDesc !== undefined) {
+						setLiveRegionText(`Row ${spaceRow + 1}, column ${spaceCol + 1}: ${spaceDesc}`)
+					}
+					break
+				}
+				case "w":
+				case "W": {
+					e.preventDefault()
+					// Read from ref — same stale-closure fix as Space (FIX 1).
+					const wRow = keyCursorRef.current.row
+					const wCol = keyCursorRef.current.col
+					const wIdx = cellIndex(wRow, wCol, cols)
+					const wDesc = onWeightCycle?.(wIdx)
+					// Announce ACTUAL post-mutation state returned by the handler (FIX 1).
+					if (wDesc !== undefined) {
+						setLiveRegionText(`Row ${wRow + 1}, column ${wCol + 1}: ${wDesc}`)
+					}
+					break
+				}
+				default:
+					break
+			}
+		},
+		[grid, onCellClick, onWeightCycle, announceCell]
+	)
+
+	// ---------------------------------------------------------------------------
 	// Render
 	// ---------------------------------------------------------------------------
 
@@ -344,17 +535,39 @@ export function PathfindingCanvas({
 	const canvasHeight = grid.rows * cellSize
 
 	return (
-		<div
-			ref={containerRef}
-			className={className}
-			style={{ position: "relative", width: canvasWidth, height: canvasHeight }}
-			onPointerDown={handlePointerDown}
-			onPointerMove={handlePointerMove}
-			onPointerUp={handlePointerUp}
-			onPointerLeave={handlePointerUp}
-		>
-			<CanvasLayer draw={drawStatic} role="img" aria-label="Pathfinding grid" />
-			<CanvasLayer draw={drawDynamic} aria-hidden="true" />
-		</div>
+		<>
+			{/*
+			 * FIX 3: live region rendered as a sibling of role="application", NOT a
+			 * descendant. NVDA+Firefox (the most common AT combo) suppresses live
+			 * regions inside application mode, so placing it outside is required for
+			 * reliable announcements. Keyboard handling remains on the application div.
+			 */}
+			<span
+				aria-live="polite"
+				aria-atomic="true"
+				className="sr-only"
+			>
+				{liveRegionText}
+			</span>
+			<div
+				ref={containerRef}
+				role="application"
+				aria-label={`Pathfinding grid — ${grid.rows} rows × ${grid.cols} columns. Use arrow keys to move cursor, Space to edit cell with the active brush, W to cycle weight.`}
+				tabIndex={0}
+				className={className}
+				style={{ position: "relative", width: canvasWidth, height: canvasHeight }}
+				data-has-focus={hasFocus ? "true" : "false"}
+				onFocus={() => setHasFocus(true)}
+				onBlur={() => setHasFocus(false)}
+				onPointerDown={handlePointerDown}
+				onPointerMove={handlePointerMove}
+				onPointerUp={handlePointerUp}
+				onPointerLeave={handlePointerUp}
+				onKeyDown={handleKeyDown}
+			>
+				<CanvasLayer draw={drawStatic} aria-hidden="true" />
+				<CanvasLayer draw={drawDynamic} aria-hidden="true" />
+			</div>
+		</>
 	)
 }

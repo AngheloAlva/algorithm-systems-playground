@@ -68,6 +68,8 @@
 	--viz-weight-3: oklch(0.88 0.09 65);
 	--viz-weight-4: oklch(0.82 0.14 50);
 	--viz-weight-5: oklch(0.75 0.18 40);
+	/* Keyboard cursor ring — high contrast on light background (near-black). */
+	--viz-key-cursor: oklch(0.145 0 0);
 }
 
 /* Dark theme */
@@ -122,6 +124,8 @@
 	--viz-weight-3: oklch(0.32 0.09 65);
 	--viz-weight-4: oklch(0.36 0.14 50);
 	--viz-weight-5: oklch(0.4 0.18 40);
+	/* Keyboard cursor ring — high contrast on dark background (near-white). */
+	--viz-key-cursor: oklch(0.985 0 0);
 }
 
 /* ── Tailwind 4 @theme inline mapping ────────────────────────────────── */
@@ -186,6 +190,7 @@
 	--color-viz-weight-3: var(--viz-weight-3);
 	--color-viz-weight-4: var(--viz-weight-4);
 	--color-viz-weight-5: var(--viz-weight-5);
+	--color-viz-key-cursor: var(--viz-key-cursor);
 
 	--radius-2xl: calc(var(--radius) * 1.8);
 	--radius-3xl: calc(var(--radius) * 2.2);
