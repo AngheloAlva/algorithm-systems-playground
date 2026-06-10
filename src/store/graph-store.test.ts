@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { useGraphStore } from "./graph-store"
 import { EDIT_MODE } from "../lib/graph/types"
 import { RUN_STATUS } from "./pathfinding-store"
+import { GRAPH_ALGORITHM } from "../lib/algorithms/graph/index"
 import { act } from "@testing-library/react"
 
 // ---------------------------------------------------------------------------
@@ -492,6 +493,69 @@ describe("graph-store — FIX 9: topology edit during RUNNING resets state", () 
 		})
 		expect(useGraphStore.getState().status).toBe(RUN_STATUS.IDLE)
 		expect(useGraphStore.getState().result).toBeNull()
+	})
+})
+
+// ---------------------------------------------------------------------------
+// A10.12 — FIX B: setAlgorithm when DONE recomputes with new algorithm
+// ---------------------------------------------------------------------------
+
+describe("graph-store — FIX B: setAlgorithm when DONE yields fresh result for new algorithm", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("setAlgorithm while DONE produces a non-null result for the new algorithm, not the old trace", () => {
+		// Load sample graph and set a start node
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		const firstNodeId = [...useGraphStore.getState().graph.nodes.keys()][0]
+		act(() => {
+			useGraphStore.setState({ startId: firstNodeId })
+			useGraphStore.getState().run()
+		})
+
+		const resultBefore = useGraphStore.getState().result
+		expect(resultBefore).not.toBeNull()
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.DONE)
+
+		// Switch algorithm while DONE (BFS → DFS or vice versa)
+		const currentAlgorithm = useGraphStore.getState().algorithm
+		const nextAlgorithm =
+			currentAlgorithm === GRAPH_ALGORITHM.BFS ? GRAPH_ALGORITHM.DFS : GRAPH_ALGORITHM.BFS
+
+		act(() => {
+			useGraphStore.getState().setAlgorithm(nextAlgorithm)
+		})
+
+		const state = useGraphStore.getState()
+		// Status stays DONE (silentRecompute recomputed with new algorithm)
+		expect(state.status).toBe(RUN_STATUS.DONE)
+		// Result is fresh and non-null
+		expect(state.result).not.toBeNull()
+		// Result is not the same object as the old trace (it was recomputed)
+		expect(state.result).not.toBe(resultBefore)
+		// Algorithm updated
+		expect(state.algorithm).toBe(nextAlgorithm)
+	})
+
+	it("setAlgorithm while IDLE stays IDLE with null result", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		// Do NOT run — keep status IDLE
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.IDLE)
+
+		act(() => {
+			useGraphStore.getState().setAlgorithm(GRAPH_ALGORITHM.DFS)
+		})
+
+		const state = useGraphStore.getState()
+		// silentRecompute is a no-op on IDLE → stays IDLE, result stays null
+		expect(state.status).toBe(RUN_STATUS.IDLE)
+		expect(state.result).toBeNull()
+		expect(state.algorithm).toBe(GRAPH_ALGORITHM.DFS)
 	})
 })
 

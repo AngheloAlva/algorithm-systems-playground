@@ -199,6 +199,15 @@ export function GraphVisualizer() {
 		}
 	}, [result, seek, play, step])
 
+	// FIX A: When result is cleared (e.g. topology edit during RUNNING resets store to
+	// IDLE/null via silentRecompute), the player sees length=0 and can end up in DONE.
+	// Reset the player to IDLE so Step/Play are usable after a new run starts.
+	useEffect(() => {
+		if (result === null) {
+			reset()
+		}
+	}, [result, reset])
+
 	const handlePlay = useCallback(() => {
 		if (status === RUN_STATUS.NO_START_NODE) return
 
@@ -241,15 +250,16 @@ export function GraphVisualizer() {
 		(alg: string | null) => {
 			if (!alg) return
 			const next = alg as GraphAlgorithm
+			// setAlgorithm internally calls silentRecompute which owns the state transition:
+			//   IDLE → stays IDLE (no recompute)
+			//   DONE → recomputes with new algorithm, shows fresh result immediately
+			//   RUNNING/PAUSED → resets to IDLE/null/cursor=0 (FIX 9 path)
+			// The result=null/IDLE reset from the RUNNING/PAUSED path triggers FIX A's
+			// effect which resets the player to IDLE as well.
 			setAlgorithm(next)
-			reset()
-			setStatus(RUN_STATUS.IDLE)
-			setCursor(0)
-			// Clear stale trace from the previous algorithm
-			useGraphStore.setState({ result: null })
 			syncUrl({ algorithm: next })
 		},
-		[setAlgorithm, reset, setStatus, setCursor, syncUrl]
+		[setAlgorithm, syncUrl]
 	)
 
 	// -------------------------------------------------------------------------
