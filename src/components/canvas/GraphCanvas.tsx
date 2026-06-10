@@ -25,6 +25,7 @@ import { useShallow } from "zustand/react/shallow"
 import { readGraphVizTokens, type GraphVizTokens } from "@/lib/graph/tokens"
 import { NODE_RADIUS, edgeAt, EDGE_THRESHOLD } from "@/lib/graph/hit-test"
 import type { GraphData, GraphStep, GraphTraceResult } from "@/lib/graph/types"
+import { EDIT_MODE } from "@/lib/graph/types"
 import type { Interaction } from "@/store/graph-store"
 
 // ---------------------------------------------------------------------------
@@ -72,10 +73,10 @@ export function replayTo(trace: GraphTraceResult, cursor: number): ReplayState {
 				frontier.add(step.nodeId)
 				break
 			case "tree-edge":
-				treeEdges.add(step.toId)
+				treeEdges.add(step.edgeId)
 				break
 			case "back-edge":
-				backEdges.add(step.toId)
+				backEdges.add(step.edgeId)
 				break
 			case "mst-include":
 				mstInclude.add(step.edgeId)
@@ -284,9 +285,9 @@ function drawDynamicLayer(
 			if (!src || !tgt) continue
 
 			let edgeColor: string | null = null
-			if (replay.treeEdges.has(edge.id) || replay.treeEdges.has(edge.target)) {
+			if (replay.treeEdges.has(edge.id)) {
 				edgeColor = tokens.edgeTree
-			} else if (replay.backEdges.has(edge.id) || replay.backEdges.has(edge.target)) {
+			} else if (replay.backEdges.has(edge.id)) {
 				edgeColor = tokens.edgeBack
 			} else if (replay.mstInclude.has(edge.id)) {
 				edgeColor = tokens.edgeMst
@@ -408,11 +409,14 @@ export function GraphCanvas({ className }: GraphCanvasProps) {
 		(e: React.PointerEvent<HTMLDivElement>) => {
 			if (e.button !== 0) return
 			const [x, y] = toCanvasCoords(e.clientX, e.clientY)
-			// Set pointer capture for MOVE_NODE drag discipline
-			;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+			// Only capture for drag gestures (MOVE_NODE, ADD_EDGE) to avoid
+			// swallowing clicks in non-drag modes (SELECT, ADD_NODE, DELETE, SET_START).
+			if (editMode === EDIT_MODE.MOVE_NODE || editMode === EDIT_MODE.ADD_EDGE) {
+				;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+			}
 			storeHandleDown(x, y)
 		},
-		[toCanvasCoords, storeHandleDown]
+		[toCanvasCoords, storeHandleDown, editMode]
 	)
 
 	const handlePointerMove = useCallback(
@@ -426,6 +430,11 @@ export function GraphCanvas({ className }: GraphCanvasProps) {
 	const handlePointerUp = useCallback(
 		(e: React.PointerEvent<HTMLDivElement>) => {
 			const [x, y] = toCanvasCoords(e.clientX, e.clientY)
+			// Explicitly release capture if it was acquired (guard with hasPointerCapture)
+			const target = e.currentTarget as HTMLDivElement
+			if (target.hasPointerCapture(e.pointerId)) {
+				target.releasePointerCapture(e.pointerId)
+			}
 			storeHandleUp(x, y)
 		},
 		[toCanvasCoords, storeHandleUp]
@@ -444,7 +453,7 @@ export function GraphCanvas({ className }: GraphCanvasProps) {
 	// Double-click: open weight editor in SELECT mode
 	const handleDoubleClick = useCallback(
 		(e: React.MouseEvent<HTMLDivElement>) => {
-			if (editMode !== "select") return
+			if (editMode !== EDIT_MODE.SELECT) return
 			const [x, y] = toCanvasCoords(e.clientX, e.clientY)
 			const { graph: g } = useGraphStore.getState()
 			const hitEdgeId = edgeAt(x, y, g.edges, g.nodes, EDGE_THRESHOLD)
