@@ -48,19 +48,24 @@
  *
  * Usage
  * -----
- * Each module defines a codec for its own state shape:
+ * Each module defines a codec for its own state shape.
+ * T must be a flat primitive-only object (string | number | boolean values —
+ * no nested objects, no functions, no class instances):
  *
- *   const pathfindingCodec: StateCodec<PathfindingState> = {
+ *   // PathfindingUrlState: { algorithm: string; speed: number; diagonal: boolean }
+ *   const pathfindingCodec: StateCodec<PathfindingUrlState> = {
  *     encode(state) {
  *       const p = new URLSearchParams()
- *       p.set("algo", state.algorithm)
- *       p.set("speed", String(state.speed))
+ *       if (state.algorithm !== "astar") p.set("algo", state.algorithm)
+ *       if (state.speed !== 4) p.set("speed", String(state.speed))
+ *       if (state.diagonal) p.set("diag", "1")
  *       return p
  *     },
  *     decode(params) {
  *       return {
- *         algorithm: (params.get("algo") ?? "astar") as Algorithm,
- *         speed: Number(params.get("speed") ?? 5),
+ *         algorithm: params.get("algo") ?? "astar",
+ *         speed: Number(params.get("speed") ?? 4),
+ *         diagonal: params.get("diag") === "1",
  *       }
  *     },
  *   }
@@ -76,7 +81,7 @@
  * T is the module-specific state shape (plain object, no functions or class
  * instances — must be serializable to string key/value pairs).
  */
-export interface StateCodec<T> {
+export interface StateCodec<T extends Record<string, string | number | boolean>> {
 	/**
 	 * Encode a state snapshot into URLSearchParams for use in the address bar.
 	 * Omit keys whose value matches the module default to keep URLs minimal.
