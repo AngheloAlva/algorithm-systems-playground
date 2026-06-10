@@ -70,6 +70,34 @@
 	--viz-weight-5: oklch(0.75 0.18 40);
 	/* Keyboard cursor ring — high contrast on light background (near-black). */
 	--viz-key-cursor: oklch(0.145 0 0);
+
+	/* ── Graph editor tokens (light) ──────────────────────────────────────── */
+	/* Node default fill: clean blue, accessible on white. */
+	--viz-node: oklch(0.55 0.15 230);
+	/* Node selected: amber ring to distinguish selection. */
+	--viz-node-selected: oklch(0.72 0.18 70);
+	/* Node start: vivid green to mark the traversal entry point. */
+	--viz-node-start: oklch(0.527 0.154 150.069);
+	/* Node label text (drawn on node fill). */
+	--viz-node-label: oklch(0.985 0 0);
+	/* Node visited overlay (BFS/DFS visited fill). */
+	--viz-node-visited: oklch(0.698 0.119 215.432);
+	/* Node frontier overlay (currently in queue/stack). */
+	--viz-node-frontier: oklch(0.769 0.188 70.08);
+	/* Edge default stroke. */
+	--viz-edge: oklch(0.439 0 0);
+	/* Edge arrowhead (directed mode). */
+	--viz-edge-arrow: oklch(0.439 0 0);
+	/* Edge weight label background. */
+	--viz-edge-weight-bg: oklch(0.97 0 0 / 90%);
+	/* Edge tree (DFS tree edge). */
+	--viz-edge-tree: oklch(0.527 0.154 150.069);
+	/* Edge back (cycle detection back-edge — 2b). */
+	--viz-edge-back: oklch(0.577 0.245 27.325);
+	/* Edge MST included (Kruskal/Prim — 2c). */
+	--viz-edge-mst: oklch(0.511 0.262 276.966);
+	/* Edge MST rejected (Kruskal/Prim — 2c). */
+	--viz-edge-mst-reject: oklch(0.75 0.12 30);
 }
 
 /* Dark theme */
@@ -126,6 +154,21 @@
 	--viz-weight-5: oklch(0.4 0.18 40);
 	/* Keyboard cursor ring — high contrast on dark background (near-white). */
 	--viz-key-cursor: oklch(0.985 0 0);
+
+	/* ── Graph editor tokens (dark) ───────────────────────────────────────── */
+	--viz-node: oklch(0.55 0.18 230);
+	--viz-node-selected: oklch(0.72 0.18 70);
+	--viz-node-start: oklch(0.627 0.154 150.069);
+	--viz-node-label: oklch(0.985 0 0);
+	--viz-node-visited: oklch(0.52 0.105 215.432);
+	--viz-node-frontier: oklch(0.72 0.16 70.08);
+	--viz-edge: oklch(0.708 0 0);
+	--viz-edge-arrow: oklch(0.708 0 0);
+	--viz-edge-weight-bg: oklch(0.205 0 0 / 90%);
+	--viz-edge-tree: oklch(0.627 0.154 150.069);
+	--viz-edge-back: oklch(0.704 0.191 22.216);
+	--viz-edge-mst: oklch(0.65 0.22 276.966);
+	--viz-edge-mst-reject: oklch(0.65 0.12 30);
 }
 
 /* ── Tailwind 4 @theme inline mapping ────────────────────────────────── */
@@ -191,6 +234,21 @@
 	--color-viz-weight-4: var(--viz-weight-4);
 	--color-viz-weight-5: var(--viz-weight-5);
 	--color-viz-key-cursor: var(--viz-key-cursor);
+
+	/* Graph editor token utilities */
+	--color-viz-node: var(--viz-node);
+	--color-viz-node-selected: var(--viz-node-selected);
+	--color-viz-node-start: var(--viz-node-start);
+	--color-viz-node-label: var(--viz-node-label);
+	--color-viz-node-visited: var(--viz-node-visited);
+	--color-viz-node-frontier: var(--viz-node-frontier);
+	--color-viz-edge: var(--viz-edge);
+	--color-viz-edge-arrow: var(--viz-edge-arrow);
+	--color-viz-edge-weight-bg: var(--viz-edge-weight-bg);
+	--color-viz-edge-tree: var(--viz-edge-tree);
+	--color-viz-edge-back: var(--viz-edge-back);
+	--color-viz-edge-mst: var(--viz-edge-mst);
+	--color-viz-edge-mst-reject: var(--viz-edge-mst-reject);
 
 	--radius-2xl: calc(var(--radius) * 1.8);
 	--radius-3xl: calc(var(--radius) * 2.2);
