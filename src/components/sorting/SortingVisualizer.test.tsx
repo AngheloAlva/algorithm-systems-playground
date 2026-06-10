@@ -623,6 +623,11 @@ describe("SortingVisualizer — FIX1 regression: incremental replay O(n) not O(n
 		// Mount once
 		render(<SortingVisualizer />)
 
+		// Prove the spy is live: the initial mount/rebuild MUST have called replayTo
+		// at least once (the full rebuild on first trace commit). Without this assertion,
+		// the negative check below could pass vacuously if the spy were never hooked.
+		expect(replayToSpy).toHaveBeenCalledTimes(1)
+
 		// Reset the spy count AFTER mount (the initial render is allowed one rebuild)
 		replayToSpy.mockClear()
 
@@ -694,65 +699,56 @@ describe("SortingVisualizer — FIX3 regression: 1-element trace resolves to DON
 	})
 
 	it("run on a 1-element trace (steps.length === 1) ends with store status DONE and never stuck at RUNNING", () => {
-		// Inject a trivial traceResult directly (steps.length === 1) with DONE-only step.
+		// Inject a trivial traceResult directly (steps.length === 1) with a DONE-only step.
 		// This simulates a single-element sort without fighting the MIN_ARRAY_LENGTH clamp.
-		// We pre-commit the trace and set pendingActionRef via a Run click on idle state
-		// that already has a trace (component will call playerPlay then pending effect fires).
-		// Instead, we test the pending effect path directly: reset store, set a trivial trace,
-		// then let the component mount and observe that the status resolves to DONE.
+		// We override run() to return this trivial trace, then click Run so the pending
+		// effect fires and must resolve status to DONE via the steps.length <= 1 guard.
 		const trivialTrace = {
 			steps: [{ kind: SORT_STEP_KIND.DONE, indices: [] as number[], pseudocodeLine: 0 }],
 			metrics: { comparisons: 0, swaps: 0, arrayLength: 1 },
 		}
-		act(() => {
-			useSortingStore.setState({
-				arr: [42],
-				traceResult: trivialTrace,
-				cursor: 0,
-				status: SORTING_RUN_STATUS.DONE,
-			})
+
+		// Patch run() via try/finally to avoid globalThis side-channel.
+		// The fake run() sets ONLY traceResult and cursor — NOT status.
+		// Without the guard, the pending effect calls playerPlay() → setStatus(RUNNING).
+		// The guard bypasses that path → status goes IDLE→DONE directly, never RUNNING.
+		// We capture every status value via a zustand subscriber to assert the RUNNING
+		// state was never reached (mutation check: remove guard → RUNNING appears → fail).
+		const originalRun = useSortingStore.getState().run
+		const observedStatuses: string[] = []
+		const unsubscribe = useSortingStore.subscribe((state) => {
+			const last = observedStatuses[observedStatuses.length - 1]
+			if (state.status !== last) observedStatuses.push(state.status)
 		})
 
-		// Mount — URL sync may reset arrayLength but traceResult is already set.
-		// The component's pending effect won't fire (pendingActionRef = PENDING_NONE).
-		// Now simulate a fresh run by resetting and clicking Run with the trivial trace
-		// already in the store (run() will call bubbleSort on arr=[42]).
-		// To keep arrayLength=1 from being overridden by URL sync, we reset store to
-		// defaults first and inject arr=[42] with arrayLength matching the codec minimum.
-		resetStore()
-		act(() => {
-			// Use a 5-element all-equal array: bubbleSort produces only COMPARE+DONE steps,
-			// still steps.length > 1. Instead inject the trivial trace post-run by spying.
-			// Simplest: use arrayLength=5 (min) but override run() to return a trivial trace.
-			const originalRun = useSortingStore.getState().run
+		let getByRole!: ReturnType<typeof render>["getByRole"]
+		try {
 			useSortingStore.setState({
 				run: () => {
-					// Inject trivial 1-step trace directly
+					// Inject trivial 1-step trace directly — leave status untouched
+					// so the guard in the pending effect is the sole path to DONE.
 					useSortingStore.setState({
 						traceResult: trivialTrace,
 						cursor: 0,
-						status: SORTING_RUN_STATUS.DONE,
 					})
 				},
 			})
-			// Cleanup: restore original run after test
-			;(globalThis as Record<string, unknown>).__restoreRun = originalRun
-		})
 
-		const { getByRole } = render(<SortingVisualizer />)
+			;({ getByRole } = render(<SortingVisualizer />))
 
-		act(() => {
-			fireEvent.click(getByRole("button", { name: /run sort/i }))
-		})
+			act(() => {
+				fireEvent.click(getByRole("button", { name: /run sort/i }))
+			})
 
-		// Restore run
-		const originalRun = (globalThis as Record<string, unknown>).__restoreRun
-		if (typeof originalRun === "function") {
-			useSortingStore.setState({ run: originalRun as () => void })
+			// Final status must be DONE (guard resolved it)
+			expect(useSortingStore.getState().status).toBe(SORTING_RUN_STATUS.DONE)
+			// Guard's distinctive side effect: status NEVER passed through RUNNING.
+			// If the guard is removed the player plays, setStatus(RUNNING) fires, and
+			// this assertion catches it — proving the guard is load-bearing.
+			expect(observedStatuses).not.toContain(SORTING_RUN_STATUS.RUNNING)
+		} finally {
+			unsubscribe()
+			useSortingStore.setState({ run: originalRun })
 		}
-
-		// Status must be DONE — not stuck at RUNNING (trivial trace guard resolved it)
-		const { status } = useSortingStore.getState()
-		expect(status).toBe(SORTING_RUN_STATUS.DONE)
 	})
 })
