@@ -608,9 +608,8 @@ describe("PathfindingCanvas — FIX 2 iter4 pointerdown sets live region via onC
 		fireEvent.pointerDown(appDiv, { clientX: 36, clientY: 12, pointerId: 1 })
 
 		const liveRegion = container.querySelector("[aria-live='polite']")
-		// Live region must contain the row/col prefix AND the returned description
-		expect(liveRegion?.textContent).toMatch(/row 1, column 2/i)
-		expect(liveRegion?.textContent).toMatch(/wall/i)
+		// Live region must match the exact formatted string
+		expect(liveRegion?.textContent).toBe("Row 1, column 2: wall")
 	})
 
 	it("pointerdown on a cell: live region text uses 'Row N, column M: {desc}' format", () => {
@@ -671,10 +670,12 @@ describe("PathfindingCanvas — FIX 2 iter4 pointerdown sets live region via onC
 			toJSON: () => ({}),
 		} as DOMRect)
 
-		fireEvent.pointerDown(appDiv, { clientX: 12, clientY: 12, pointerId: 1 })
+		// Fire at cell (0,1) — clientX=36, clientY=12 (empty cell, not start/end)
+		// so handlePointerDown takes the wall-drag path and calls onCellClick
+		fireEvent.pointerDown(appDiv, { clientX: 36, clientY: 12, pointerId: 1 })
 
 		const liveRegion = container.querySelector("[aria-live='polite']")
-		// Live region should remain empty (no update from undefined return)
+		// Live region should remain empty (undefined return → desc guard not satisfied)
 		expect(liveRegion?.textContent).toBe("")
 	})
 })

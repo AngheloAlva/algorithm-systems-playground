@@ -393,7 +393,6 @@ describe("PathfindingVisualizer — FIX 1 iter4 drag-path returns undefined", ()
 
 	it("WALL brush drag (pointermove, no isPointerDown) onCellClick returns undefined", async () => {
 		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
-		const onCellClick = vi.fn<(cellIndex: number, isPointerDown?: boolean) => string | undefined>()
 		const { getByRole } = render(<PathfindingVisualizer />)
 		const canvas = getByRole("application")
 
@@ -442,6 +441,8 @@ describe("PathfindingVisualizer — FIX 1 iter4 drag-path returns undefined", ()
 
 		// The live region text must NOT have changed after the drag move
 		// (undefined return → no setLiveRegionText call)
+		// Guard against a broken setup that leaves textAfterDown empty
+		expect(textAfterDown).not.toBe("")
 		expect(textAfterMove).toBe(textAfterDown)
 
 		await act(async () => {
@@ -449,7 +450,6 @@ describe("PathfindingVisualizer — FIX 1 iter4 drag-path returns undefined", ()
 		})
 
 		void grid
-		void onCellClick
 	})
 
 	it("ERASE brush drag (pointermove, no isPointerDown) onCellClick returns undefined — live region unchanged", async () => {
@@ -513,6 +513,8 @@ describe("PathfindingVisualizer — FIX 1 iter4 drag-path returns undefined", ()
 		})
 		const liveAfterMove = document.querySelector("[aria-live='polite']")?.textContent ?? ""
 
+		// Guard against a broken setup that leaves liveAfterDown empty
+		expect(liveAfterDown).not.toBe("")
 		expect(liveAfterMove).toBe(liveAfterDown)
 
 		await act(async () => {
