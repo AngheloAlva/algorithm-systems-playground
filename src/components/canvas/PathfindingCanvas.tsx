@@ -26,6 +26,7 @@ import { CanvasLayer } from "./CanvasLayer"
 import { cellAt } from "@/lib/grid/hit-test"
 import { CELL, type Grid } from "@/lib/grid/grid.types"
 import { STEP, type Step } from "@/lib/algorithms/pathfinding/types"
+import { index as cellIndex } from "@/lib/grid/grid"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,12 +56,18 @@ export interface PathfindingCanvasProps {
 	cursor: number
 	/** CSS pixels for each grid cell (determines canvas layout). */
 	cellSize?: number
-	/** Called when the user clicks/drags to toggle a wall. */
+	/** Called when the user clicks/drags to paint/erase a cell. */
 	onCellClick?: (cellIndex: number) => void
 	/** Called when the user drags the start endpoint to a new cell. */
 	onStartDrag?: (cellIndex: number) => void
 	/** Called when the user drags the end endpoint to a new cell. */
 	onEndDrag?: (cellIndex: number) => void
+	/**
+	 * Called when the keyboard W key is pressed at the cursor position, or when
+	 * the weight brush is active and the user taps a cell. The caller decides
+	 * whether to cycle the cell's weight.
+	 */
+	onWeightCycle?: (cellIndex: number) => void
 	/** Extra className on the container div. */
 	className?: string
 }
@@ -210,6 +217,7 @@ export function PathfindingCanvas({
 	onCellClick,
 	onStartDrag,
 	onEndDrag,
+	onWeightCycle,
 	className,
 }: PathfindingCanvasProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
@@ -221,6 +229,12 @@ export function PathfindingCanvas({
 
 	// Track pointer drag state
 	const isDraggingRef = useRef<"start" | "end" | "wall" | null>(null)
+
+	// ---------------------------------------------------------------------------
+	// Keyboard cursor state — row/col position of the keyboard focus cell
+	// ---------------------------------------------------------------------------
+	const [keyCursorRow, setKeyCursorRow] = useState(0)
+	const [keyCursorCol, setKeyCursorCol] = useState(0)
 
 	// Read (or re-read) tokens from the container element
 	const getTokens = useCallback((): VizTokens => {
@@ -337,6 +351,46 @@ export function PathfindingCanvas({
 	}, [])
 
 	// ---------------------------------------------------------------------------
+	// Keyboard handler — arrow key cursor navigation + Space/W interaction
+	// ---------------------------------------------------------------------------
+
+	const handleKeyDown = useCallback(
+		(e: React.KeyboardEvent<HTMLDivElement>) => {
+			const { rows, cols } = grid
+			switch (e.key) {
+				case "ArrowUp":
+					e.preventDefault()
+					setKeyCursorRow((r) => Math.max(0, r - 1))
+					break
+				case "ArrowDown":
+					e.preventDefault()
+					setKeyCursorRow((r) => Math.min(rows - 1, r + 1))
+					break
+				case "ArrowLeft":
+					e.preventDefault()
+					setKeyCursorCol((c) => Math.max(0, c - 1))
+					break
+				case "ArrowRight":
+					e.preventDefault()
+					setKeyCursorCol((c) => Math.min(cols - 1, c + 1))
+					break
+				case " ":
+					e.preventDefault()
+					onCellClick?.(cellIndex(keyCursorRow, keyCursorCol, cols))
+					break
+				case "w":
+				case "W":
+					e.preventDefault()
+					onWeightCycle?.(cellIndex(keyCursorRow, keyCursorCol, cols))
+					break
+				default:
+					break
+			}
+		},
+		[grid, keyCursorRow, keyCursorCol, onCellClick, onWeightCycle]
+	)
+
+	// ---------------------------------------------------------------------------
 	// Render
 	// ---------------------------------------------------------------------------
 
@@ -346,14 +400,18 @@ export function PathfindingCanvas({
 	return (
 		<div
 			ref={containerRef}
+			role="application"
+			aria-label={`Pathfinding grid — ${grid.rows} rows × ${grid.cols} columns. Use arrow keys to move cursor, Space to toggle wall, W to cycle weight.`}
+			tabIndex={0}
 			className={className}
 			style={{ position: "relative", width: canvasWidth, height: canvasHeight }}
 			onPointerDown={handlePointerDown}
 			onPointerMove={handlePointerMove}
 			onPointerUp={handlePointerUp}
 			onPointerLeave={handlePointerUp}
+			onKeyDown={handleKeyDown}
 		>
-			<CanvasLayer draw={drawStatic} role="img" aria-label="Pathfinding grid" />
+			<CanvasLayer draw={drawStatic} aria-hidden="true" />
 			<CanvasLayer draw={drawDynamic} aria-hidden="true" />
 		</div>
 	)

@@ -99,6 +99,7 @@ export function PathfindingVisualizer() {
 		clearPath,
 		generateMaze,
 		paintCell,
+		cycleWeightAt,
 		dragEndpoint,
 		setCursor,
 		setStatus,
@@ -118,6 +119,7 @@ export function PathfindingVisualizer() {
 			clearPath: s.clearPath,
 			generateMaze: s.generateMaze,
 			paintCell: s.paintCell,
+			cycleWeightAt: s.cycleWeightAt,
 			dragEndpoint: s.dragEndpoint,
 			setCursor: s.setCursor,
 			setStatus: s.setStatus,
@@ -222,9 +224,27 @@ export function PathfindingVisualizer() {
 				if (lastPaintedCellRef.current === cellIndex) return
 				lastPaintedCellRef.current = cellIndex
 				scheduleAction(() => paintCell(row, col))
+			} else if (brush === BRUSH_MODE.WEIGHT) {
+				// Weight brush: cycle weight on each click (pointer dedupe not needed —
+				// each click intentionally advances the weight by one tier)
+				if (lastPaintedCellRef.current === cellIndex) return
+				lastPaintedCellRef.current = cellIndex
+				scheduleAction(() => paintCell(row, col))
 			}
 		},
 		[grid, brush, scheduleAction, paintCell]
+	)
+
+	// Weight cycle callback — used by the keyboard W key in the canvas
+	const handleWeightCycle = useCallback(
+		(cellIdx: number) => {
+			const { rows, cols } = grid
+			const row = Math.floor(cellIdx / cols)
+			const col = cellIdx % cols
+			if (row < 0 || col < 0 || row >= rows || col >= cols) return
+			scheduleAction(() => cycleWeightAt(row, col))
+		},
+		[grid, scheduleAction, cycleWeightAt]
 	)
 
 	const handleStartDrag = useCallback(
@@ -520,6 +540,7 @@ export function PathfindingVisualizer() {
 							onCellClick={handleCellClick}
 							onStartDrag={handleStartDrag}
 							onEndDrag={handleEndDrag}
+							onWeightCycle={handleWeightCycle}
 						/>
 					</div>
 

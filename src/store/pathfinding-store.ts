@@ -102,6 +102,8 @@ export interface PathfindingState {
 	// Actions — grid mutations
 	paintCell: (row: number, col: number) => void
 	setCellWeight: (row: number, col: number, weight: number) => void
+	/** Cycle the weight of (row, col) through [1→2→3→4→5→1]. Used by the keyboard W key. */
+	cycleWeightAt: (row: number, col: number) => void
 	dragEndpoint: (endpoint: "start" | "end", row: number, col: number) => void
 	generateMaze: (seed: number) => void
 	resetGrid: () => void
@@ -238,6 +240,14 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 	setCellWeight(row: number, col: number, weight: number) {
 		const { grid } = get()
 		const nextGrid = setWeight(grid, row, col, weight)
+		set({ grid: nextGrid })
+		silentRecompute(set, get)
+	},
+
+	cycleWeightAt(row: number, col: number) {
+		const { grid } = get()
+		const nextGrid = cycleWeight(grid, row, col)
+		if (nextGrid === grid) return // no-op (wall or special cell)
 		set({ grid: nextGrid })
 		silentRecompute(set, get)
 	},

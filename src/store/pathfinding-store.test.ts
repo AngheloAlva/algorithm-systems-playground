@@ -893,6 +893,82 @@ describe("pathfindingStore — edge case: very small grid (10x10)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// cycleWeightAt — keyboard W action (PR4 task 5.3)
+// ---------------------------------------------------------------------------
+
+describe("pathfindingStore — cycleWeightAt", () => {
+	beforeEach(resetStore)
+
+	it("cycles weight from 1 to 2 on first call", () => {
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().cycleWeightAt(r, c)
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(2)
+	})
+
+	it("two calls cycle from 1 to 3", () => {
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().cycleWeightAt(r, c)
+		usePathfindingStore.getState().cycleWeightAt(r, c)
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(3)
+	})
+
+	it("triggers silent recompute when status is done", () => {
+		usePathfindingStore.getState().run()
+		if (usePathfindingStore.getState().status !== "done") return
+
+		const resultBefore = usePathfindingStore.getState().result
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (i !== grid.start && i !== grid.end && grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		if (emptyCellIndex === -1) return
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		usePathfindingStore.getState().cycleWeightAt(r, c)
+		expect(usePathfindingStore.getState().result).not.toBe(resultBefore)
+	})
+
+	it("is a no-op on a wall cell", () => {
+		usePathfindingStore.getState().setBrush(BRUSH_MODE.WALL)
+		const { grid } = usePathfindingStore.getState()
+		let emptyCellIndex = -1
+		for (let i = 0; i < grid.cells.length; i++) {
+			if (grid.cells[i] === CELL.EMPTY) {
+				emptyCellIndex = i
+				break
+			}
+		}
+		const { r, c } = coords(emptyCellIndex, grid.cols)
+		// Make it a wall first
+		usePathfindingStore.getState().paintCell(r, c)
+		const weightBefore = usePathfindingStore.getState().grid.weights[emptyCellIndex]
+
+		// Now try to cycle weight — should be a no-op
+		usePathfindingStore.getState().cycleWeightAt(r, c)
+		expect(usePathfindingStore.getState().grid.weights[emptyCellIndex]).toBe(weightBefore)
+	})
+})
+
+// ---------------------------------------------------------------------------
 // Perf sanity: recompute < 16ms on default grid
 // ---------------------------------------------------------------------------
 
