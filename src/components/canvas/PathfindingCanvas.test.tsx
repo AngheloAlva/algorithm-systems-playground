@@ -258,6 +258,176 @@ describe("PathfindingCanvas — keyboard cursor navigation", () => {
 })
 
 // ---------------------------------------------------------------------------
+// FIX 5 — aria-live region announces cursor position and cell state
+// ---------------------------------------------------------------------------
+
+describe("PathfindingCanvas — FIX 5 aria-live announcements", () => {
+	it("contains an aria-live polite region inside the container", () => {
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const container = getByRole("application")
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		expect(liveRegion).not.toBeNull()
+	})
+
+	it("announces row/column on ArrowRight move", () => {
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const container = getByRole("application")
+		container.focus()
+		fireEvent.keyDown(container, { key: "ArrowRight" })
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		// Should announce "Row 1, column 2: ..." (1-indexed)
+		expect(liveRegion?.textContent).toMatch(/row 1, column 2/i)
+	})
+
+	it("announces row/column on ArrowDown move", () => {
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const container = getByRole("application")
+		container.focus()
+		fireEvent.keyDown(container, { key: "ArrowDown" })
+		const liveRegion = container.querySelector("[aria-live='polite']")
+		expect(liveRegion?.textContent).toMatch(/row 2, column 1/i)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 7 — keyboard cursor only visible when container has focus
+// ---------------------------------------------------------------------------
+
+describe("PathfindingCanvas — FIX 7 keyboard cursor visibility", () => {
+	it("container exposes data-has-focus=false initially (cursor hidden for mouse-only users)", () => {
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const container = getByRole("application")
+		expect(container.getAttribute("data-has-focus")).toBe("false")
+	})
+
+	it("container exposes data-has-focus=true after focus event", () => {
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const container = getByRole("application")
+		fireEvent.focus(container)
+		expect(container.getAttribute("data-has-focus")).toBe("true")
+	})
+
+	it("container exposes data-has-focus=false after blur event", () => {
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas grid={grid} trace={NO_TRACE} cursor={0} cellSize={24} />
+		)
+		const container = getByRole("application")
+		fireEvent.focus(container)
+		fireEvent.blur(container)
+		expect(container.getAttribute("data-has-focus")).toBe("false")
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 1 — stale closure: ArrowKey + Space/W must act on the MOVED-TO cell
+// ---------------------------------------------------------------------------
+
+describe("PathfindingCanvas — FIX 1 stale-closure-free keyboard actions", () => {
+	it("Space acts on the cell the cursor moved to, not the cell before the arrow press", () => {
+		const onCellClick = vi.fn()
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={onCellClick}
+			/>
+		)
+		const container = getByRole("application")
+		container.focus()
+		// Arrow and Space dispatched in the same synchronous batch
+		fireEvent.keyDown(container, { key: "ArrowRight" })
+		fireEvent.keyDown(container, { key: " " })
+		// Space must act on (0,1) = index 1, NOT on (0,0) = index 0
+		expect(onCellClick).toHaveBeenCalledWith(1)
+		expect(onCellClick).not.toHaveBeenCalledWith(0)
+	})
+
+	it("W acts on the cell the cursor moved to, not the cell before the arrow press", () => {
+		const onWeightCycle = vi.fn()
+		const grid = makeGrid()
+		const { getByRole } = render(
+			<PathfindingCanvas
+				grid={grid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onWeightCycle={onWeightCycle}
+			/>
+		)
+		const container = getByRole("application")
+		container.focus()
+		fireEvent.keyDown(container, { key: "ArrowDown" })
+		fireEvent.keyDown(container, { key: "W" })
+		// W must act on (1,0) = index 5, NOT on (0,0) = index 0
+		expect(onWeightCycle).toHaveBeenCalledWith(5)
+		expect(onWeightCycle).not.toHaveBeenCalledWith(0)
+	})
+})
+
+// ---------------------------------------------------------------------------
+// FIX 4 — cursor reset when grid dimensions change
+// ---------------------------------------------------------------------------
+
+describe("PathfindingCanvas — FIX 4 cursor resets on grid dimension change", () => {
+	it("after grid dimensions change, Space acts on (0,0) even if cursor was moved before", () => {
+		const onCellClick = vi.fn()
+		const smallGrid = makeGrid(5, 5)
+		const { getByRole, rerender } = render(
+			<PathfindingCanvas
+				grid={smallGrid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={onCellClick}
+			/>
+		)
+		const container = getByRole("application")
+		container.focus()
+		// Move cursor to (2,2)
+		fireEvent.keyDown(container, { key: "ArrowDown" })
+		fireEvent.keyDown(container, { key: "ArrowDown" })
+		fireEvent.keyDown(container, { key: "ArrowRight" })
+		fireEvent.keyDown(container, { key: "ArrowRight" })
+
+		// Now swap to a different-sized grid (simulates maze generation / reset)
+		const newGrid = makeGrid(3, 3)
+		rerender(
+			<PathfindingCanvas
+				grid={newGrid}
+				trace={NO_TRACE}
+				cursor={0}
+				cellSize={24}
+				onCellClick={onCellClick}
+			/>
+		)
+		onCellClick.mockClear()
+
+		// After grid change, cursor must be reset to (0,0) — Space = index 0
+		fireEvent.keyDown(container, { key: " " })
+		expect(onCellClick).toHaveBeenCalledWith(0)
+	})
+})
+
+// ---------------------------------------------------------------------------
 // Keyboard weight cycling: w key
 // ---------------------------------------------------------------------------
 

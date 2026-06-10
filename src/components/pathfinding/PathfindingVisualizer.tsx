@@ -213,38 +213,52 @@ export function PathfindingVisualizer() {
 	// -------------------------------------------------------------------------
 
 	const handleCellClick = useCallback(
-		(cellIndex: number) => {
+		(cellIndex: number, isPointerDown?: boolean) => {
 			const { rows, cols } = grid
 			const row = Math.floor(cellIndex / cols)
 			const col = cellIndex % cols
 			if (row < 0 || col < 0 || row >= rows || col >= cols) return
 
 			if (brush === BRUSH_MODE.WALL || brush === BRUSH_MODE.ERASE) {
-				// Dedupe: skip if the pointer is still within the same cell
+				// Dedupe: skip if the pointer is still within the same cell.
+				// Guards against rAF-loop re-dispatching paintCell for a stationary
+				// pointer, which caused wall toggle flicker.
 				if (lastPaintedCellRef.current === cellIndex) return
 				lastPaintedCellRef.current = cellIndex
 				scheduleAction(() => paintCell(row, col))
 			} else if (brush === BRUSH_MODE.WEIGHT) {
-				// Weight brush: cycle weight on each click (pointer dedupe not needed —
-				// each click intentionally advances the weight by one tier)
+				// Weight brush semantics:
+				// - Each pointerdown on a cell advances weight exactly one tier.
+				//   On pointerdown, lastPaintedCellRef is reset so the same cell can
+				//   be re-advanced on the next click (isPointerDown=true signals reset).
+				// - During a drag, entering a NEW cell advances it once; moving within
+				//   the same cell does NOT re-advance (per-cell dedupe across move events).
+				// - Dispatched immediately — no rAF coalescing so discrete taps are
+				//   never dropped.
+				if (isPointerDown) {
+					// Reset dedupe on each new pointerdown so repeated clicks advance
+					lastPaintedCellRef.current = null
+				}
 				if (lastPaintedCellRef.current === cellIndex) return
 				lastPaintedCellRef.current = cellIndex
-				scheduleAction(() => paintCell(row, col))
+				paintCell(row, col)
 			}
 		},
 		[grid, brush, scheduleAction, paintCell]
 	)
 
-	// Weight cycle callback — used by the keyboard W key in the canvas
+	// Weight cycle callback — used by the keyboard W key in the canvas.
+	// Dispatched immediately (no rAF coalescing) so discrete W presses are
+	// never dropped.
 	const handleWeightCycle = useCallback(
 		(cellIdx: number) => {
 			const { rows, cols } = grid
 			const row = Math.floor(cellIdx / cols)
 			const col = cellIdx % cols
 			if (row < 0 || col < 0 || row >= rows || col >= cols) return
-			scheduleAction(() => cycleWeightAt(row, col))
+			cycleWeightAt(row, col)
 		},
-		[grid, scheduleAction, cycleWeightAt]
+		[grid, cycleWeightAt]
 	)
 
 	const handleStartDrag = useCallback(

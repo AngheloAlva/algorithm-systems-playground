@@ -9,6 +9,7 @@ import { setWeight, index } from "./grid"
  * This is the action used by the weight-brush on each tap during pointer interaction.
  *
  * No-op (returns the same grid reference) when:
+ * - row or col is out of bounds (row < 0, col < 0, row >= g.rows, or col >= g.cols)
  * - The cell is a wall (impassable; weight irrelevant)
  * - The cell is the start or end marker
  *
@@ -17,6 +18,12 @@ import { setWeight, index } from "./grid"
  * @see spec §5.2, PR4 task 5.1
  */
 export function cycleWeight(g: Grid, row: number, col: number): Grid {
+	// Bounds guard: out-of-range coordinates would produce NaN→0 via Uint8Array
+	// coercion — return the original grid unchanged instead.
+	if (row < 0 || col < 0 || row >= g.rows || col >= g.cols) {
+		return g
+	}
+
 	const i = index(row, col, g.cols)
 	const kind = g.cells[i]
 

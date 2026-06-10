@@ -21,7 +21,7 @@
  * @see design §4, D5, D12
  */
 
-import { useRef, useEffect, useCallback, useState } from "react"
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from "react"
 import { CanvasLayer } from "./CanvasLayer"
 import { cellAt } from "@/lib/grid/hit-test"
 import { CELL, type Grid } from "@/lib/grid/grid.types"
@@ -45,6 +45,8 @@ interface VizTokens {
 	path: string
 	gridLine: string
 	weight: WeightTokens
+	/** Keyboard cursor dashed-border color. Distinct in light AND dark themes. */
+	keyCursor: string
 }
 
 export interface PathfindingCanvasProps {
@@ -56,8 +58,11 @@ export interface PathfindingCanvasProps {
 	cursor: number
 	/** CSS pixels for each grid cell (determines canvas layout). */
 	cellSize?: number
-	/** Called when the user clicks/drags to paint/erase a cell. */
-	onCellClick?: (cellIndex: number) => void
+	/**
+	 * Called when the user clicks/drags to paint/erase a cell.
+	 * `isPointerDown` is true only on the initial pointerdown event (not on move).
+	 */
+	onCellClick?: (cellIndex: number, isPointerDown?: boolean) => void
 	/** Called when the user drags the start endpoint to a new cell. */
 	onStartDrag?: (cellIndex: number) => void
 	/** Called when the user drags the end endpoint to a new cell. */
@@ -98,6 +103,7 @@ function readVizTokens(el: HTMLElement): VizTokens {
 			get("--viz-weight-4"),
 			get("--viz-weight-5"),
 		],
+		keyCursor: get("--viz-key-cursor"),
 	}
 }
 
@@ -207,18 +213,20 @@ function drawDynamicLayer(
 
 /**
  * Draw a keyboard cursor indicator at (row, col).
- * Renders a white dashed border so it is visible over any background color.
+ * Color is read from the --viz-key-cursor semantic token so it is visible
+ * on both light and dark themes (FIX 3 -- no hardcoded rgba value).
  */
 function drawKeyCursor(
 	ctx: CanvasRenderingContext2D,
 	row: number,
 	col: number,
-	cellSize: number
+	cellSize: number,
+	tokens: VizTokens
 ) {
 	const x = col * cellSize
 	const y = row * cellSize
 	ctx.save()
-	ctx.strokeStyle = "rgba(255, 255, 255, 0.9)"
+	ctx.strokeStyle = tokens.keyCursor
 	ctx.lineWidth = 2
 	ctx.setLineDash([3, 3])
 	ctx.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2)
@@ -250,11 +258,25 @@ export function PathfindingCanvas({
 	// Track pointer drag state
 	const isDraggingRef = useRef<"start" | "end" | "wall" | null>(null)
 
+	// FIX 7 — track focus so keyboard cursor is only drawn when the container
+	// has keyboard focus (hidden for mouse-only users).
+	const [hasFocus, setHasFocus] = useState(false)
+
 	// ---------------------------------------------------------------------------
 	// Keyboard cursor state — row/col position of the keyboard focus cell
+	//
+	// FIX 1: Cursor position is stored in a ref AND mirrored to state.
+	// Arrow handlers update the ref FIRST (synchronously), then mirror to state
+	// for a repaint. Space/W read from the ref — never from closed-over state —
+	// so an arrow press followed immediately by Space/W operates on the already-
+	// moved cell, not the previous cell captured at useCallback creation.
 	// ---------------------------------------------------------------------------
-	const [keyCursorRow, setKeyCursorRow] = useState(0)
-	const [keyCursorCol, setKeyCursorCol] = useState(0)
+	/** Single state object so a grid-dimension reset is one setState call (avoids cascading-render lint rule). */
+	const [keyCursorPos, setKeyCursorPos] = useState({ row: 0, col: 0 })
+	const keyCursorRef = useRef({ row: 0, col: 0 })
+
+	// FIX 5: text announced by the aria-live region on keyboard moves and edits
+	const [liveRegionText, setLiveRegionText] = useState("")
 
 	// Read (or re-read) tokens from the container element
 	const getTokens = useCallback((): VizTokens => {
@@ -271,6 +293,7 @@ export function PathfindingCanvas({
 				path: "#6366f1",
 				gridLine: "#e5e7eb",
 				weight: ["#fef9c3", "#fef08a", "#fde047", "#facc15"],
+				keyCursor: "#111",
 			}
 		}
 		const tokens = readVizTokens(el)
@@ -295,12 +318,27 @@ export function PathfindingCanvas({
 		(ctx: CanvasRenderingContext2D) => {
 			const tokens = tokensRef.current ?? getTokens()
 			drawDynamicLayer(ctx, grid, trace, cursor, cellSize, tokens)
-			// Draw keyboard cursor highlight on top of the animation overlay
-			drawKeyCursor(ctx, keyCursorRow, keyCursorCol, cellSize)
+			// FIX 7: Only draw keyboard cursor when the container has focus.
+			// Hiding it when unfocused prevents confusing mouse-only users who
+			// never move the keyboard cursor.
+			if (hasFocus) {
+				drawKeyCursor(ctx, keyCursorPos.row, keyCursorPos.col, cellSize, tokens)
+			}
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[grid, trace, cursor, cellSize, getTokens, themeVersion, keyCursorRow, keyCursorCol]
+		[grid, trace, cursor, cellSize, getTokens, themeVersion, keyCursorPos, hasFocus]
 	)
+
+	// FIX 4 — Reset keyboard cursor when grid dimensions change (maze gen / reset).
+	// Without this, the cursor can sit out-of-bounds after a smaller grid is loaded.
+	// useLayoutEffect fires synchronously after DOM mutations; it is the correct
+	// hook for resets that must be visible before the next paint.
+	useLayoutEffect(() => {
+		const origin = { row: 0, col: 0 }
+		keyCursorRef.current = origin
+		// eslint-disable-next-line react-hooks/set-state-in-effect
+		setKeyCursorPos(origin)
+	}, [grid.rows, grid.cols])
 
 	// Subscribe to theme changes (next-themes toggles .dark on <html>)
 	useEffect(() => {
@@ -341,7 +379,7 @@ export function PathfindingCanvas({
 				isDraggingRef.current = "end"
 			} else {
 				isDraggingRef.current = "wall"
-				onCellClick?.(cellIndex)
+				onCellClick?.(cellIndex, true)
 			}
 		},
 		[getCellFromEvent, grid.cells, onCellClick]
@@ -376,40 +414,87 @@ export function PathfindingCanvas({
 	// Keyboard handler — arrow key cursor navigation + Space/W interaction
 	// ---------------------------------------------------------------------------
 
+	/**
+	 * Build a screen-reader announcement string for the current cursor position.
+	 * Called after every arrow move and after Space/W edits (FIX 5).
+	 */
+	const announceCell = useCallback(
+		(row: number, col: number) => {
+			const { cols, cells, weights, start, end } = grid
+			const i = cellIndex(row, col, cols)
+			let cellDesc: string
+			if (i === start) {
+				cellDesc = "start"
+			} else if (i === end) {
+				cellDesc = "end"
+			} else if (cells[i] === CELL.WALL) {
+				cellDesc = "wall"
+			} else {
+				const w = weights[i]
+				cellDesc = w > 1 ? `weight ${w}` : "empty"
+			}
+			setLiveRegionText(`Row ${row + 1}, column ${col + 1}: ${cellDesc}`)
+		},
+		[grid]
+	)
+
 	const handleKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>) => {
 			const { rows, cols } = grid
 			switch (e.key) {
-				case "ArrowUp":
+				case "ArrowUp": {
 					e.preventDefault()
-					setKeyCursorRow((r) => Math.max(0, r - 1))
+					const nextRow = Math.max(0, keyCursorRef.current.row - 1)
+					keyCursorRef.current.row = nextRow
+					setKeyCursorPos((p) => ({ ...p, row: nextRow }))
+					announceCell(nextRow, keyCursorRef.current.col)
 					break
-				case "ArrowDown":
+				}
+				case "ArrowDown": {
 					e.preventDefault()
-					setKeyCursorRow((r) => Math.min(rows - 1, r + 1))
+					const nextRow = Math.min(rows - 1, keyCursorRef.current.row + 1)
+					keyCursorRef.current.row = nextRow
+					setKeyCursorPos((p) => ({ ...p, row: nextRow }))
+					announceCell(nextRow, keyCursorRef.current.col)
 					break
-				case "ArrowLeft":
+				}
+				case "ArrowLeft": {
 					e.preventDefault()
-					setKeyCursorCol((c) => Math.max(0, c - 1))
+					const nextCol = Math.max(0, keyCursorRef.current.col - 1)
+					keyCursorRef.current.col = nextCol
+					setKeyCursorPos((p) => ({ ...p, col: nextCol }))
+					announceCell(keyCursorRef.current.row, nextCol)
 					break
-				case "ArrowRight":
+				}
+				case "ArrowRight": {
 					e.preventDefault()
-					setKeyCursorCol((c) => Math.min(cols - 1, c + 1))
+					const nextCol = Math.min(cols - 1, keyCursorRef.current.col + 1)
+					keyCursorRef.current.col = nextCol
+					setKeyCursorPos((p) => ({ ...p, col: nextCol }))
+					announceCell(keyCursorRef.current.row, nextCol)
 					break
+				}
 				case " ":
 					e.preventDefault()
-					onCellClick?.(cellIndex(keyCursorRow, keyCursorCol, cols))
+					// Read from ref — always reflects the most recent arrow move even if
+					// the state update has not propagated yet (FIX 1 stale closure).
+					onCellClick?.(cellIndex(keyCursorRef.current.row, keyCursorRef.current.col, cols))
+					announceCell(keyCursorRef.current.row, keyCursorRef.current.col)
 					break
 				case "w":
 				case "W":
 					e.preventDefault()
-					onWeightCycle?.(cellIndex(keyCursorRow, keyCursorCol, cols))
+					// Read from ref — same stale-closure fix as Space (FIX 1).
+					onWeightCycle?.(
+						cellIndex(keyCursorRef.current.row, keyCursorRef.current.col, cols)
+					)
+					announceCell(keyCursorRef.current.row, keyCursorRef.current.col)
 					break
 				default:
 					break
 			}
 		},
-		[grid, keyCursorRow, keyCursorCol, onCellClick, onWeightCycle]
+		[grid, onCellClick, onWeightCycle, announceCell]
 	)
 
 	// ---------------------------------------------------------------------------
@@ -427,12 +512,23 @@ export function PathfindingCanvas({
 			tabIndex={0}
 			className={className}
 			style={{ position: "relative", width: canvasWidth, height: canvasHeight }}
+			data-has-focus={hasFocus ? "true" : "false"}
+			onFocus={() => setHasFocus(true)}
+			onBlur={() => setHasFocus(false)}
 			onPointerDown={handlePointerDown}
 			onPointerMove={handlePointerMove}
 			onPointerUp={handlePointerUp}
 			onPointerLeave={handlePointerUp}
 			onKeyDown={handleKeyDown}
 		>
+			{/* FIX 5: visually-hidden live region for screen-reader announcements */}
+			<span
+				aria-live="polite"
+				aria-atomic="true"
+				className="sr-only"
+			>
+				{liveRegionText}
+			</span>
 			<CanvasLayer draw={drawStatic} aria-hidden="true" />
 			<CanvasLayer draw={drawDynamic} aria-hidden="true" />
 		</div>

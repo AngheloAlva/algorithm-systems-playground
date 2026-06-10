@@ -208,12 +208,16 @@ export const usePathfindingStore = create<PathfindingState>()((set, get) => ({
 	/**
 	 * Paint the cell at (row, col) using the current brush mode.
 	 *
-	 * - WALL brush: SET wall (idempotent — no-op if already a wall; no flicker on drag)
-	 * - ERASE brush: CLEAR to empty (idempotent — no-op if already empty)
+	 * - WALL brush:   SET wall (idempotent — no-op if already a wall; no flicker on drag)
+	 * - ERASE brush:  CLEAR to empty (idempotent — no-op if already empty)
+	 * - WEIGHT brush: CYCLE weight [1->2->3->4->5->1] (intentionally NON-idempotent --
+	 *                 each call advances the weight by one tier regardless of the
+	 *                 previous value; callers must deduplicate if repeated calls per
+	 *                 cell are undesirable)
 	 *
-	 * Toggle semantics (toggleWall) are intentionally NOT used here because a
-	 * pointer drag re-enters the same cell multiple times per frame; toggling
-	 * would oscillate the cell between wall and empty on every frame.
+	 * Toggle semantics (toggleWall) are intentionally NOT used for WALL/ERASE because
+	 * a pointer drag re-enters the same cell multiple times per frame; toggling would
+	 * oscillate the cell between wall and empty on every frame.
 	 *
 	 * @remarks
 	 * Drag batching is the UI layer's responsibility. This action recomputes

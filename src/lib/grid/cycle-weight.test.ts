@@ -93,4 +93,29 @@ describe("cycleWeight", () => {
 		const g2 = cycleWeight(g, 1, 1)
 		expect(g2.cells[1 * 3 + 1]).toBe(g.cells[1 * 3 + 1])
 	})
+
+	// FIX 8 — bounds guard
+	it("returns grid unchanged when row is negative (out-of-range guard)", () => {
+		const g = createGrid(3, 3)
+		const g2 = cycleWeight(g, -1, 0)
+		expect(g2).toBe(g)
+	})
+
+	it("returns grid unchanged when col is negative (out-of-range guard)", () => {
+		const g = createGrid(3, 3)
+		const g2 = cycleWeight(g, 0, -1)
+		expect(g2).toBe(g)
+	})
+
+	it("returns grid unchanged when row >= grid.rows (out-of-range guard)", () => {
+		const g = createGrid(3, 3)
+		const g2 = cycleWeight(g, 3, 0)
+		expect(g2).toBe(g)
+	})
+
+	it("returns grid unchanged when col >= grid.cols (out-of-range guard)", () => {
+		const g = createGrid(3, 3)
+		const g2 = cycleWeight(g, 0, 3)
+		expect(g2).toBe(g)
+	})
 })
