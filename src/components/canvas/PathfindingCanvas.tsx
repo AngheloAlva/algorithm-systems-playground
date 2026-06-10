@@ -205,6 +205,26 @@ function drawDynamicLayer(
 	}
 }
 
+/**
+ * Draw a keyboard cursor indicator at (row, col).
+ * Renders a white dashed border so it is visible over any background color.
+ */
+function drawKeyCursor(
+	ctx: CanvasRenderingContext2D,
+	row: number,
+	col: number,
+	cellSize: number
+) {
+	const x = col * cellSize
+	const y = row * cellSize
+	ctx.save()
+	ctx.strokeStyle = "rgba(255, 255, 255, 0.9)"
+	ctx.lineWidth = 2
+	ctx.setLineDash([3, 3])
+	ctx.strokeRect(x + 1, y + 1, cellSize - 2, cellSize - 2)
+	ctx.restore()
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -275,9 +295,11 @@ export function PathfindingCanvas({
 		(ctx: CanvasRenderingContext2D) => {
 			const tokens = tokensRef.current ?? getTokens()
 			drawDynamicLayer(ctx, grid, trace, cursor, cellSize, tokens)
+			// Draw keyboard cursor highlight on top of the animation overlay
+			drawKeyCursor(ctx, keyCursorRow, keyCursorCol, cellSize)
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[grid, trace, cursor, cellSize, getTokens, themeVersion]
+		[grid, trace, cursor, cellSize, getTokens, themeVersion, keyCursorRow, keyCursorCol]
 	)
 
 	// Subscribe to theme changes (next-themes toggles .dark on <html>)
