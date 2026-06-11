@@ -63,6 +63,7 @@ describe("runKruskal — G15", () => {
 
 		expect(result.metrics.mstWeight).toBe(6)
 		expect(result.metrics.mstEdgeCount).toBe(3)
+		expect(result.metrics.visitedCount).toBe(4) // all 4 nodes in forest
 	})
 
 	it("Scenario G15-A: includes C—D (w=1), A—C (w=2), B—C (w=3) as MST edges", () => {
@@ -121,6 +122,8 @@ describe("runKruskal — G15", () => {
 		expect(includeEdgeIds).toContain("eAB")
 		expect(includeEdgeIds).toContain("eCD")
 		expect(result.metrics.mstEdgeCount).toBe(2)
+		expect(result.metrics.mstWeight).toBe(5) // eAB(2) + eCD(3)
+		expect(result.metrics.visitedCount).toBe(4) // all 4 nodes in forest
 		// Forest: mstEdgeCount = nodes.size - 2 (two components)
 	})
 
@@ -163,6 +166,7 @@ describe("runKruskal — G15", () => {
 		expect(result.metrics.mstWeight).toBe(0)
 		expect(result.metrics.mstEdgeCount).toBe(0)
 		expect(result.steps).toHaveLength(0)
+		expect(result.metrics.visitedCount).toBe(1) // single node spans itself
 	})
 
 	it("empty graph produces empty trace", () => {

@@ -5,9 +5,12 @@
  * Starts from startId; falls back to the lowest-label node if startId is absent.
  *
  * Disconnected graph behavior:
- *   Prim only spans the connected component containing startId.
- *   Nodes in other components are NOT visited (spec G16.6 / design §7).
- *   This differs from Kruskal which produces a full spanning forest.
+ *   Prim produces a minimum spanning FOREST, consistent with Kruskal.
+ *   After exhausting the start component, the algorithm re-seeds from the
+ *   next unvisited node (lowest-label) and continues until ALL nodes are
+ *   covered. Each component root emits a "visit" step with no mst-include.
+ *   This deviates from spec G16.6 (single-component only) — user-approved
+ *   for consistency between Prim and Kruskal.
  *
  * Heap push-duplicates strategy:
  *   When a neighbor becomes reachable via a lighter edge, we push the new entry
@@ -35,18 +38,21 @@ import { BinaryHeap } from "../../structures/binary-heap"
 
 export const PRIM_PSEUDOCODE = [
 	"function Prim(graph, start):",                         // 0
-	"  visited ← {start}",                                  // 1
-	"  heap ← min-heap of edges adjacent to start",        // 2
-	"  mst ← []",                                          // 3
-	"  while heap is not empty:",                          // 4
-	"    (u, v, w) ← heap.pop() (min weight edge)",        // 5
-	"    if v ∈ visited:  // stale entry",                 // 6
-	"      skip edge    // mst-reject",                    // 7
-	"    else:",                                            // 8
-	"      mst.add(edge)  // mst-include",                 // 9
-	"      visited.add(v)",                                 // 10
-	"      push edges adjacent to v into heap",            // 11
-	"  return mst",                                        // 12
+	"  visited ← {}; forest ← []",                         // 1
+	"  roots ← [start] + unvisited nodes (lowest-label)",  // 2
+	"  for each root in roots:",                            // 3
+	"    if root ∈ visited: continue",                     // 4
+	"    visited.add(root)  // component root, no edge",   // 5
+	"    heap ← min-heap of edges adjacent to root",       // 6
+	"    while heap is not empty:",                        // 7
+	"      (u, v, w) ← heap.pop() (min weight edge)",     // 8
+	"      if v ∈ visited:  // stale entry",               // 9
+	"        skip edge    // mst-reject",                  // 10
+	"      else:",                                          // 11
+	"        forest.add(edge)  // mst-include",            // 12
+	"        visited.add(v)",                               // 13
+	"        push edges adjacent to v into heap",          // 14
+	"  return forest",                                     // 15
 ]
 
 // ---------------------------------------------------------------------------
@@ -126,36 +132,55 @@ export function runPrim(graph: GraphData, startId: string): GraphTraceResult {
 	}
 
 	const visited = new Set<string>()
-	visited.add(effectiveStart)
 
-	const heap = new BinaryHeap<HeapEntry>(heapCompare)
+	// Build the ordered list of root candidates: effectiveStart first, then
+	// remaining nodes in ascending label order (lowest-label tie-breaking).
+	const remainingByLabel = [...graph.nodes.values()]
+		.filter((n) => n.id !== effectiveStart)
+		.sort((a, b) => {
+			if (a.label < b.label) return -1
+			if (a.label > b.label) return 1
+			return 0
+		})
+		.map((n) => n.id)
 
-	// Seed the heap with all edges adjacent to the start node
-	for (const { edge, neighborId } of adj.get(effectiveStart) ?? []) {
-		if (!visited.has(neighborId)) {
-			heap.push({ edge, toId: neighborId })
-		}
-	}
+	const roots = [effectiveStart, ...remainingByLabel]
 
-	while (heap.size() > 0) {
-		const entry = heap.pop()!
+	for (const root of roots) {
+		if (visited.has(root)) continue
 
-		if (visited.has(entry.toId)) {
-			// Stale entry — both endpoints are already in the MST
-			steps.push({ kind: "mst-reject", edgeId: entry.edge.id, line: 7 })
-			continue
-		}
+		// Seed this component: the root node itself has no incoming forest edge.
+		visited.add(root)
 
-		// Add this edge to the MST
-		steps.push({ kind: "mst-include", edgeId: entry.edge.id, line: 9 })
-		visited.add(entry.toId)
-		mstWeight += entry.edge.weight
-		mstEdgeCount++
+		const heap = new BinaryHeap<HeapEntry>(heapCompare)
 
-		// Push all edges from the newly added node to unvisited neighbors
-		for (const { edge, neighborId } of adj.get(entry.toId) ?? []) {
+		// Push edges adjacent to this component root
+		for (const { edge, neighborId } of adj.get(root) ?? []) {
 			if (!visited.has(neighborId)) {
 				heap.push({ edge, toId: neighborId })
+			}
+		}
+
+		while (heap.size() > 0) {
+			const entry = heap.pop()!
+
+			if (visited.has(entry.toId)) {
+				// Stale entry — both endpoints already in the forest
+				steps.push({ kind: "mst-reject", edgeId: entry.edge.id, line: 10 })
+				continue
+			}
+
+			// Add this edge to the forest
+			steps.push({ kind: "mst-include", edgeId: entry.edge.id, line: 12 })
+			visited.add(entry.toId)
+			mstWeight += entry.edge.weight
+			mstEdgeCount++
+
+			// Push all edges from the newly added node to unvisited neighbors
+			for (const { edge, neighborId } of adj.get(entry.toId) ?? []) {
+				if (!visited.has(neighborId)) {
+					heap.push({ edge, toId: neighborId })
+				}
 			}
 		}
 	}

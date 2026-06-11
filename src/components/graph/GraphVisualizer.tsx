@@ -83,6 +83,12 @@ const EDIT_MODE_ORDER = [
 ] as const
 
 // ---------------------------------------------------------------------------
+// MST algorithm set — used to disable selector entries when graph is directed
+// ---------------------------------------------------------------------------
+
+const MST_ALGORITHM_IDS = new Set<string>([GRAPH_ALGORITHM.KRUSKAL, GRAPH_ALGORITHM.PRIM])
+
+// ---------------------------------------------------------------------------
 // Pending-action constants (same pattern as SortingVisualizer)
 // ---------------------------------------------------------------------------
 
@@ -274,9 +280,6 @@ export function GraphVisualizer() {
 	const currentAlgorithmEntry = GRAPH_ALGORITHM_REGISTRY[algorithm]
 	const pseudocode = currentAlgorithmEntry?.pseudocode ?? []
 
-	// MST algorithm set — used to disable entries when graph is directed
-	const MST_ALGORITHM_IDS = new Set<string>([GRAPH_ALGORITHM.KRUSKAL, GRAPH_ALGORITHM.PRIM])
-
 	// -------------------------------------------------------------------------
 	// Render
 	// -------------------------------------------------------------------------
@@ -420,6 +423,7 @@ export function GraphVisualizer() {
 								onClick={handleStep}
 								disabled={isNoStartNode || isMstDirected || playerStatus === PLAYER_STATUS.DONE}
 								aria-label="Step"
+								aria-disabled={isNoStartNode || isMstDirected || playerStatus === PLAYER_STATUS.DONE}
 								className="h-8"
 							>
 								<SkipForwardIcon className="h-3 w-3" />

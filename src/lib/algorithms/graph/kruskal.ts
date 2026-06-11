@@ -100,7 +100,7 @@ export function runKruskal(graph: GraphData, _startId: string): GraphTraceResult
 	return {
 		steps,
 		metrics: {
-			visitedCount: 0,
+			visitedCount: graph.nodes.size,
 			traversalOrder: [],
 			mstWeight,
 			mstEdgeCount,

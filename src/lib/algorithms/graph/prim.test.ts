@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest"
 import { runPrim, PRIM_PSEUDOCODE } from "./prim"
+import { runKruskal } from "./kruskal"
 import type { GraphData, GraphEdge, GraphNode } from "../../graph/types"
 
 // ---------------------------------------------------------------------------
@@ -83,10 +84,10 @@ describe("runPrim — G16", () => {
 	})
 
 	// -------------------------------------------------------------------------
-	// G16-B: Disconnected graph — Prim only reaches start component
+	// G16-B: Disconnected graph — Prim produces a spanning FOREST (all components)
 	// -------------------------------------------------------------------------
 
-	it("Scenario G16-B: disconnected graph — only reaches start component", () => {
+	it("Scenario G16-B: disconnected graph — produces spanning forest covering all components", () => {
 		const disconnected = makeGraph(
 			[
 				{ id: "nA", label: "A" },
@@ -106,9 +107,51 @@ describe("runPrim — G16", () => {
 			.filter((s) => s.kind === "mst-include")
 			.map((s) => (s as { edgeId: string }).edgeId)
 
+		// Both components must be spanned
 		expect(includeEdgeIds).toContain("eAB")
-		expect(includeEdgeIds).not.toContain("eCD") // different component
-		expect(result.metrics.mstEdgeCount).toBe(1)
+		expect(includeEdgeIds).toContain("eCD") // second component — forest behavior
+		// Forest: nodes(4) - components(2) = 2 edges
+		expect(result.metrics.mstEdgeCount).toBe(2)
+		expect(result.metrics.mstWeight).toBe(5) // eAB(2) + eCD(3)
+		// All nodes visited
+		expect(result.metrics.visitedCount).toBe(4)
+	})
+
+	// -------------------------------------------------------------------------
+	// G16-B2: Prim and Kruskal agree on mstWeight — connected graph
+	// -------------------------------------------------------------------------
+
+	it("Prim and Kruskal produce equal mstWeight on a connected graph", () => {
+		const primResult = runPrim(GRAPH_4NODE, "nA")
+		const kruskalResult = runKruskal(GRAPH_4NODE, "")
+
+		expect(primResult.metrics.mstWeight).toBe(kruskalResult.metrics.mstWeight)
+		expect(primResult.metrics.mstEdgeCount).toBe(kruskalResult.metrics.mstEdgeCount)
+	})
+
+	// -------------------------------------------------------------------------
+	// G16-B3: Prim and Kruskal agree on mstWeight — disconnected graph (forest)
+	// -------------------------------------------------------------------------
+
+	it("Prim and Kruskal produce equal mstWeight on a disconnected graph (forest)", () => {
+		const disconnected = makeGraph(
+			[
+				{ id: "nA", label: "A" },
+				{ id: "nB", label: "B" },
+				{ id: "nC", label: "C" },
+				{ id: "nD", label: "D" },
+			],
+			[
+				{ id: "eAB", source: "nA", target: "nB", weight: 2 },
+				{ id: "eCD", source: "nC", target: "nD", weight: 3 },
+			]
+		)
+
+		const primResult = runPrim(disconnected, "nA")
+		const kruskalResult = runKruskal(disconnected, "")
+
+		expect(primResult.metrics.mstWeight).toBe(kruskalResult.metrics.mstWeight) // both 5
+		expect(primResult.metrics.mstEdgeCount).toBe(kruskalResult.metrics.mstEdgeCount) // both 2
 	})
 
 	// -------------------------------------------------------------------------
@@ -171,9 +214,8 @@ describe("runPrim — G16", () => {
 		const result = runPrim(GRAPH_4NODE, "nA")
 
 		const rejectSteps = result.steps.filter((s) => s.kind === "mst-reject")
-		// There should be at least one mst-reject (stale pop from heap)
-		// In the 4-node graph, some edges will be stale by the time popped
-		expect(rejectSteps.length).toBeGreaterThanOrEqual(0)
+		// GRAPH_4NODE started from nA: exactly 2 stale pops (eAB and eBD become stale)
+		expect(rejectSteps.length).toBe(2)
 		// Total steps = mst-include + mst-reject
 		const includeSteps = result.steps.filter((s) => s.kind === "mst-include")
 		expect(result.steps.length).toBe(includeSteps.length + rejectSteps.length)
