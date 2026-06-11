@@ -8,7 +8,8 @@
  *   Prim produces a minimum spanning FOREST, consistent with Kruskal.
  *   After exhausting the start component, the algorithm re-seeds from the
  *   next unvisited node (lowest-label) and continues until ALL nodes are
- *   covered. Each component root emits a "visit" step with no mst-include.
+ *   covered. Each component root emits a "visit" step (no edge — roots have
+ *   no incoming MST edge by definition).
  *   This deviates from spec G16.6 (single-component only) — user-approved
  *   for consistency between Prim and Kruskal.
  *
@@ -150,7 +151,9 @@ export function runPrim(graph: GraphData, startId: string): GraphTraceResult {
 		if (visited.has(root)) continue
 
 		// Seed this component: the root node itself has no incoming forest edge.
+		// Emit a visit step so the canvas overlay lights up every component root.
 		visited.add(root)
+		steps.push({ kind: "visit", nodeId: root, line: 5 })
 
 		const heap = new BinaryHeap<HeapEntry>(heapCompare)
 

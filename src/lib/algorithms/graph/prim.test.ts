@@ -216,9 +216,72 @@ describe("runPrim — G16", () => {
 		const rejectSteps = result.steps.filter((s) => s.kind === "mst-reject")
 		// GRAPH_4NODE started from nA: exactly 2 stale pops (eAB and eBD become stale)
 		expect(rejectSteps.length).toBe(2)
-		// Total steps = mst-include + mst-reject
+		// Total steps = visit + mst-include + mst-reject
 		const includeSteps = result.steps.filter((s) => s.kind === "mst-include")
-		expect(result.steps.length).toBe(includeSteps.length + rejectSteps.length)
+		const visitSteps = result.steps.filter((s) => s.kind === "visit")
+		expect(result.steps.length).toBe(visitSteps.length + includeSteps.length + rejectSteps.length)
+	})
+
+	// -------------------------------------------------------------------------
+	// G16-8: visit steps for component roots (doc-comment spec)
+	// -------------------------------------------------------------------------
+
+	it("connected graph emits exactly 1 visit step (the single start root)", () => {
+		const result = runPrim(GRAPH_4NODE, "nA")
+
+		const visitSteps = result.steps.filter((s) => s.kind === "visit")
+		expect(visitSteps.length).toBe(1)
+	})
+
+	it("disconnected graph emits exactly 2 visit steps (one per component root)", () => {
+		const disconnected = makeGraph(
+			[
+				{ id: "nA", label: "A" },
+				{ id: "nB", label: "B" },
+				{ id: "nC", label: "C" },
+				{ id: "nD", label: "D" },
+			],
+			[
+				{ id: "eAB", source: "nA", target: "nB", weight: 2 },
+				{ id: "eCD", source: "nC", target: "nD", weight: 3 },
+			]
+		)
+
+		const result = runPrim(disconnected, "nA")
+
+		const visitSteps = result.steps.filter((s) => s.kind === "visit")
+		expect(visitSteps.length).toBe(2)
+	})
+
+	it("visit steps have nodeId set to the component root and line index 5", () => {
+		const disconnected = makeGraph(
+			[
+				{ id: "nA", label: "A" },
+				{ id: "nB", label: "B" },
+				{ id: "nC", label: "C" },
+				{ id: "nD", label: "D" },
+			],
+			[
+				{ id: "eAB", source: "nA", target: "nB", weight: 2 },
+				{ id: "eCD", source: "nC", target: "nD", weight: 3 },
+			]
+		)
+
+		const result = runPrim(disconnected, "nA")
+
+		const visitSteps = result.steps.filter((s) => s.kind === "visit") as Array<{
+			kind: "visit"
+			nodeId: string
+			line: number
+		}>
+
+		// Both visit steps must reference valid nodes and point to pseudocode line 5
+		for (const step of visitSteps) {
+			expect(disconnected.nodes.has(step.nodeId)).toBe(true)
+			expect(step.line).toBe(5)
+			expect(step.line).toBeGreaterThanOrEqual(0)
+			expect(step.line).toBeLessThan(PRIM_PSEUDOCODE.length)
+		}
 	})
 
 	// -------------------------------------------------------------------------
