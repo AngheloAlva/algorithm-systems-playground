@@ -613,6 +613,83 @@ describe("graph-store — B3: cycle detection does not require start node", () =
 })
 
 // ---------------------------------------------------------------------------
+// C5 — Directed-mode MST guard
+// When graph.directed === true and selectedAlgorithm is kruskal or prim,
+// run() must block (not call the algorithm) and show MST_DIRECTED_GRAPH status.
+// setDirected(true) while MST is selected + non-idle must reset to IDLE.
+// ---------------------------------------------------------------------------
+
+describe("graph-store — C5: directed-mode MST guard", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("run() with kruskal and directed=true sets MST_DIRECTED_GRAPH status (not DONE)", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+			useGraphStore.setState({ algorithm: GRAPH_ALGORITHM.KRUSKAL })
+			useGraphStore.getState().setDirected(true)
+		})
+
+		act(() => {
+			useGraphStore.getState().run()
+		})
+
+		const state = useGraphStore.getState()
+		expect(state.status).toBe(RUN_STATUS.MST_DIRECTED_GRAPH)
+		expect(state.result).toBeNull()
+	})
+
+	it("run() with prim and directed=true sets MST_DIRECTED_GRAPH status", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+			useGraphStore.setState({ algorithm: GRAPH_ALGORITHM.PRIM })
+			useGraphStore.getState().setDirected(true)
+		})
+
+		act(() => {
+			useGraphStore.getState().run()
+		})
+
+		const state = useGraphStore.getState()
+		expect(state.status).toBe(RUN_STATUS.MST_DIRECTED_GRAPH)
+		expect(state.result).toBeNull()
+	})
+
+	it("setDirected(true) while MST is selected and status=DONE resets to IDLE", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+			useGraphStore.setState({ algorithm: GRAPH_ALGORITHM.KRUSKAL, status: RUN_STATUS.DONE })
+		})
+
+		act(() => {
+			useGraphStore.getState().setDirected(true)
+		})
+
+		const state = useGraphStore.getState()
+		expect(state.status).toBe(RUN_STATUS.IDLE)
+		expect(state.result).toBeNull()
+	})
+
+	it("run() with kruskal and directed=false works normally", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+			useGraphStore.setState({ algorithm: GRAPH_ALGORITHM.KRUSKAL })
+			useGraphStore.getState().setDirected(false)
+		})
+
+		act(() => {
+			useGraphStore.getState().run()
+		})
+
+		const state = useGraphStore.getState()
+		expect(state.status).toBe(RUN_STATUS.DONE)
+		expect(state.result).not.toBeNull()
+		expect(typeof state.result?.metrics.mstWeight).toBe("number")
+	})
+})
+
+// ---------------------------------------------------------------------------
 // NG2 — no zustand persist middleware
 // ---------------------------------------------------------------------------
 

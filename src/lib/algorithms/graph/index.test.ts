@@ -80,4 +80,36 @@ describe("GRAPH_ALGORITHM_REGISTRY (G6-A)", () => {
 		expect(result.metrics.cycleDetected).toBe(false)
 		expect(typeof result.metrics.backEdgeCount).toBe("number")
 	})
+
+	// -------------------------------------------------------------------------
+	// PR 2c entries: kruskal, prim
+	// -------------------------------------------------------------------------
+
+	it("has keys 'kruskal' and 'prim' (C4)", () => {
+		expect(Object.keys(GRAPH_ALGORITHM_REGISTRY)).toContain("kruskal")
+		expect(Object.keys(GRAPH_ALGORITHM_REGISTRY)).toContain("prim")
+	})
+
+	it("kruskal.requiresStartNode === false", () => {
+		expect(GRAPH_ALGORITHM_REGISTRY["kruskal"].requiresStartNode).toBe(false)
+	})
+
+	it("prim.requiresStartNode === false", () => {
+		// Prim auto-selects the lowest-label node; no explicit start needed
+		expect(GRAPH_ALGORITHM_REGISTRY["prim"].requiresStartNode).toBe(false)
+	})
+
+	it("kruskal entry runs and returns MST metrics", () => {
+		const { graph } = buildLinearGraph()
+		const result = GRAPH_ALGORITHM_REGISTRY["kruskal"].run(graph, "")
+		expect(typeof result.metrics.mstWeight).toBe("number")
+		expect(typeof result.metrics.mstEdgeCount).toBe("number")
+	})
+
+	it("prim entry runs and returns MST metrics", () => {
+		const { graph } = buildLinearGraph()
+		const result = GRAPH_ALGORITHM_REGISTRY["prim"].run(graph, "")
+		expect(typeof result.metrics.mstWeight).toBe("number")
+		expect(typeof result.metrics.mstEdgeCount).toBe("number")
+	})
 })

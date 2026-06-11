@@ -50,6 +50,8 @@ export const RUN_STATUS = {
 	DONE: "done",
 	/** Graph algorithms that require a start node but none has been selected. */
 	NO_START_NODE: "no-start-node",
+	/** MST algorithms (Kruskal/Prim) require an undirected graph. */
+	MST_DIRECTED_GRAPH: "mst-directed-graph",
 } as const
 
 export type RunStatus = (typeof RUN_STATUS)[keyof typeof RUN_STATUS]
