@@ -34,7 +34,7 @@ import {
 	selectGraphMetrics,
 	RUN_STATUS,
 } from "@/store/graph-store"
-import { GRAPH_ALGORITHM_REGISTRY } from "@/lib/algorithms/graph/index"
+import { GRAPH_ALGORITHM_REGISTRY, GRAPH_ALGORITHM } from "@/lib/algorithms/graph/index"
 import type { GraphAlgorithm } from "@/lib/algorithms/graph/index"
 import { EDIT_MODE } from "@/lib/graph/types"
 import { graphCodec } from "@/lib/url-state/graph-codec"
@@ -210,6 +210,7 @@ export function GraphVisualizer() {
 
 	const handlePlay = useCallback(() => {
 		if (status === RUN_STATUS.NO_START_NODE) return
+		if (status === RUN_STATUS.MST_DIRECTED_GRAPH) return
 
 		if (result === null) {
 			pendingRef.current = PENDING_PLAY
@@ -230,6 +231,7 @@ export function GraphVisualizer() {
 
 	const handleStep = useCallback(() => {
 		if (status === RUN_STATUS.NO_START_NODE) return
+		if (status === RUN_STATUS.MST_DIRECTED_GRAPH) return
 
 		if (result === null) {
 			pendingRef.current = PENDING_STEP
@@ -268,8 +270,12 @@ export function GraphVisualizer() {
 
 	const isPlaying = playerStatus === PLAYER_STATUS.PLAYING
 	const isNoStartNode = status === RUN_STATUS.NO_START_NODE
+	const isMstDirected = status === RUN_STATUS.MST_DIRECTED_GRAPH
 	const currentAlgorithmEntry = GRAPH_ALGORITHM_REGISTRY[algorithm]
 	const pseudocode = currentAlgorithmEntry?.pseudocode ?? []
+
+	// MST algorithm set — used to disable entries when graph is directed
+	const MST_ALGORITHM_IDS = new Set([GRAPH_ALGORITHM.KRUSKAL, GRAPH_ALGORITHM.PRIM])
 
 	// -------------------------------------------------------------------------
 	// Render
@@ -285,6 +291,17 @@ export function GraphVisualizer() {
 				>
 					<span>Select a start node to run this algorithm.</span>
 					<span className="text-muted-foreground">(Switch to Set Start mode and click a node)</span>
+				</div>
+			)}
+
+			{/* MST directed-graph warning (C5) */}
+			{isMstDirected && (
+				<div
+					role="alert"
+					className="bg-warning/10 border-warning/30 text-warning-foreground flex items-center gap-2 rounded-lg border px-4 py-2 text-sm"
+				>
+					<span>MST requires an undirected graph.</span>
+					<span className="text-muted-foreground">(Toggle off "Directed" to run Kruskal or Prim)</span>
 				</div>
 			)}
 
@@ -359,11 +376,22 @@ export function GraphVisualizer() {
 								<SelectValue />
 							</SelectTrigger>
 							<SelectContent>
-								{Object.values(GRAPH_ALGORITHM_REGISTRY).map((entry) => (
-									<SelectItem key={entry.id} value={entry.id}>
-										{entry.label}
-									</SelectItem>
-								))}
+								{Object.values(GRAPH_ALGORITHM_REGISTRY).map((entry) => {
+									const isMstDisabled = MST_ALGORITHM_IDS.has(entry.id) && graph.directed
+									return (
+										<SelectItem
+											key={entry.id}
+											value={entry.id}
+											disabled={isMstDisabled}
+											title={isMstDisabled ? "MST requires undirected graph" : undefined}
+										>
+											{entry.label}
+											{isMstDisabled && (
+												<span className="text-muted-foreground ml-1 text-xs">(directed)</span>
+											)}
+										</SelectItem>
+									)
+								})}
 							</SelectContent>
 						</Select>
 
@@ -373,9 +401,9 @@ export function GraphVisualizer() {
 								size="sm"
 								variant="outline"
 								onClick={isPlaying ? handlePause : handlePlay}
-								disabled={isNoStartNode}
+								disabled={isNoStartNode || isMstDirected}
 								aria-label={isPlaying ? "Pause" : "Play"}
-								aria-disabled={isNoStartNode}
+								aria-disabled={isNoStartNode || isMstDirected}
 								className="h-8 flex-1"
 							>
 								{isPlaying ? (
@@ -390,7 +418,7 @@ export function GraphVisualizer() {
 								size="sm"
 								variant="outline"
 								onClick={handleStep}
-								disabled={isNoStartNode || playerStatus === PLAYER_STATUS.DONE}
+								disabled={isNoStartNode || isMstDirected || playerStatus === PLAYER_STATUS.DONE}
 								aria-label="Step"
 								className="h-8"
 							>

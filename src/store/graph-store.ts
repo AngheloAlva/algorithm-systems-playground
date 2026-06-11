@@ -151,6 +151,12 @@ const INITIAL_VALUES = {
 }
 
 // ---------------------------------------------------------------------------
+// MST algorithm set — algorithms that require undirected graphs
+// ---------------------------------------------------------------------------
+
+const MST_ALGORITHMS = new Set<string>([GRAPH_ALGORITHM.KRUSKAL, GRAPH_ALGORITHM.PRIM])
+
+// ---------------------------------------------------------------------------
 // silentRecompute helper (called within set/get closures)
 // ---------------------------------------------------------------------------
 
@@ -173,6 +179,15 @@ function silentRecompute(
 
 	const entry = GRAPH_ALGORITHM_REGISTRY[algorithm]
 	if (!entry) return
+
+	// Guard: MST algorithms require undirected graphs (C5).
+	// In silentRecompute (triggered by topology/directed change) we reset to IDLE
+	// silently — the user gets the MST_DIRECTED_GRAPH message only when they
+	// explicitly click Run.
+	if (MST_ALGORITHMS.has(algorithm) && graph.directed) {
+		set({ status: RUN_STATUS.IDLE, result: null, cursor: 0 })
+		return
+	}
 
 	// Guard: requiresStartNode but no startId
 	if (entry.requiresStartNode && !startId) {
@@ -391,6 +406,12 @@ export const useGraphStore = create<GraphState>()((set, get) => ({
 		const { graph, algorithm, startId } = get()
 		const entry = GRAPH_ALGORITHM_REGISTRY[algorithm]
 		if (!entry) return
+
+		// Guard: MST algorithms require undirected graphs (C5)
+		if (MST_ALGORITHMS.has(algorithm) && graph.directed) {
+			set({ status: RUN_STATUS.MST_DIRECTED_GRAPH, result: null })
+			return
+		}
 
 		if (entry.requiresStartNode && !startId) {
 			set({ status: RUN_STATUS.NO_START_NODE, result: null })
