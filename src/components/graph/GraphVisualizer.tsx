@@ -275,7 +275,7 @@ export function GraphVisualizer() {
 	const pseudocode = currentAlgorithmEntry?.pseudocode ?? []
 
 	// MST algorithm set — used to disable entries when graph is directed
-	const MST_ALGORITHM_IDS = new Set([GRAPH_ALGORITHM.KRUSKAL, GRAPH_ALGORITHM.PRIM])
+	const MST_ALGORITHM_IDS = new Set<string>([GRAPH_ALGORITHM.KRUSKAL, GRAPH_ALGORITHM.PRIM])
 
 	// -------------------------------------------------------------------------
 	// Render
@@ -301,7 +301,7 @@ export function GraphVisualizer() {
 					className="bg-warning/10 border-warning/30 text-warning-foreground flex items-center gap-2 rounded-lg border px-4 py-2 text-sm"
 				>
 					<span>MST requires an undirected graph.</span>
-					<span className="text-muted-foreground">(Toggle off "Directed" to run Kruskal or Prim)</span>
+					<span className="text-muted-foreground">(Toggle off &quot;Directed&quot; to run Kruskal or Prim)</span>
 				</div>
 			)}
 
