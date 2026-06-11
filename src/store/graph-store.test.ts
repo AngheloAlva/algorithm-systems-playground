@@ -560,6 +560,59 @@ describe("graph-store — FIX B: setAlgorithm when DONE yields fresh result for 
 })
 
 // ---------------------------------------------------------------------------
+// B3 — Cycle detection runs without a start node (requiresStartNode: false)
+// ---------------------------------------------------------------------------
+
+describe("graph-store — B3: cycle detection does not require start node", () => {
+	beforeEach(() => {
+		resetStore()
+	})
+
+	it("run() with algorithm='cycle' and startId=null does NOT set NO_START_NODE", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		act(() => {
+			useGraphStore.setState({ startId: null, algorithm: GRAPH_ALGORITHM.CYCLE })
+		})
+
+		act(() => {
+			useGraphStore.getState().run()
+		})
+
+		const state = useGraphStore.getState()
+		expect(state.status).not.toBe(RUN_STATUS.NO_START_NODE)
+		// Should have a result with cycle metrics
+		expect(state.result).not.toBeNull()
+		expect(state.result?.metrics.cycleDetected).toBeDefined()
+		expect(typeof state.result?.metrics.backEdgeCount).toBe("number")
+	})
+
+	it("silentRecompute with algorithm='cycle' and startId=null returns a result (not NO_START_NODE)", () => {
+		act(() => {
+			useGraphStore.getState().loadSampleGraph()
+		})
+		const firstNodeId = [...useGraphStore.getState().graph.nodes.keys()][0]
+		// Run BFS first to get into DONE state, then switch to cycle detection
+		act(() => {
+			useGraphStore.setState({ startId: firstNodeId })
+			useGraphStore.getState().run()
+		})
+		expect(useGraphStore.getState().status).toBe(RUN_STATUS.DONE)
+
+		// Switch to cycle detection — silentRecompute should run it without needing startId
+		act(() => {
+			useGraphStore.setState({ algorithm: GRAPH_ALGORITHM.CYCLE, startId: null })
+			useGraphStore.getState().setAlgorithm(GRAPH_ALGORITHM.CYCLE)
+		})
+
+		const state = useGraphStore.getState()
+		expect(state.status).not.toBe(RUN_STATUS.NO_START_NODE)
+		expect(state.result?.metrics.cycleDetected).toBeDefined()
+	})
+})
+
+// ---------------------------------------------------------------------------
 // NG2 — no zustand persist middleware
 // ---------------------------------------------------------------------------
 

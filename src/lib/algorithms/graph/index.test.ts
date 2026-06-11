@@ -30,9 +30,10 @@ function buildLinearGraph() {
 // ---------------------------------------------------------------------------
 
 describe("GRAPH_ALGORITHM_REGISTRY (G6-A)", () => {
-	it("has keys 'bfs' and 'dfs'", () => {
+	it("has keys 'bfs', 'dfs', and 'cycle'", () => {
 		expect(Object.keys(GRAPH_ALGORITHM_REGISTRY)).toContain("bfs")
 		expect(Object.keys(GRAPH_ALGORITHM_REGISTRY)).toContain("dfs")
+		expect(Object.keys(GRAPH_ALGORITHM_REGISTRY)).toContain("cycle")
 	})
 
 	it("each entry has required shape fields", () => {
@@ -66,5 +67,17 @@ describe("GRAPH_ALGORITHM_REGISTRY (G6-A)", () => {
 		for (const [key, entry] of Object.entries(GRAPH_ALGORITHM_REGISTRY)) {
 			expect(entry.id).toBe(key)
 		}
+	})
+
+	it("cycle.requiresStartNode === false (whole-graph multi-source DFS)", () => {
+		expect(GRAPH_ALGORITHM_REGISTRY["cycle"].requiresStartNode).toBe(false)
+	})
+
+	it("cycle entry can run on a graph without a startId (empty string)", () => {
+		const { graph } = buildLinearGraph()
+		// Should not throw and should return valid metrics
+		const result = GRAPH_ALGORITHM_REGISTRY["cycle"].run(graph, "")
+		expect(result.metrics.cycleDetected).toBe(false)
+		expect(typeof result.metrics.backEdgeCount).toBe("number")
 	})
 })
