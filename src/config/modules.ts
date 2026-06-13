@@ -62,7 +62,7 @@ export const MODULES: Module[] = [
     title: "Simulation",
     description:
       "Run step-by-step algorithm simulations with configurable parameters.",
-    status: MODULE_STATUS.COMING_SOON,
+    status: MODULE_STATUS.AVAILABLE,
     icon: GitBranchIcon,
   },
   {
