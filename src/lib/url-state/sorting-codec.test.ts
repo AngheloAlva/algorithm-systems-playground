@@ -205,9 +205,14 @@ describe("sortingCodec — hostile inputs (speed)", () => {
 })
 
 describe("sortingCodec — hostile inputs (algorithm)", () => {
-	it("sort=insertion falls back to default (not in allowed set)", () => {
-		const params = new URLSearchParams("sort=insertion")
+	it("sort=bogosort falls back to default (unknown algorithm)", () => {
+		const params = new URLSearchParams("sort=bogosort")
 		expect(sortingCodec.decode(params).algorithm).toBe(SORTING_DEFAULTS.algorithm)
+	})
+
+	it("sort=insertion is now a valid algorithm (5th sort added)", () => {
+		const params = new URLSearchParams("sort=insertion")
+		expect(sortingCodec.decode(params).algorithm).toBe("insertion")
 	})
 })
 
