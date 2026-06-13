@@ -30,8 +30,23 @@ vi.mock("recharts", () => {
     <div data-testid={`line-${dataKey}`} data-name={name ?? dataKey} />
   )
 
-  const XAxis = ({ dataKey }: { dataKey?: string }) => (
-    <div data-testid="x-axis" data-key={dataKey ?? ""} />
+  const XAxis = ({
+    dataKey,
+    tickFormatter,
+  }: {
+    dataKey?: string
+    tickFormatter?: (value: unknown) => string
+  }) => (
+    <div
+      data-testid="x-axis"
+      data-key={dataKey ?? ""}
+      data-has-tick-formatter={tickFormatter != null ? "true" : "false"}
+      data-tick-formatter-sample={
+        tickFormatter != null
+          ? tickFormatter(24.000000000000007)
+          : ""
+      }
+    />
   )
 
   const YAxis = () => <div data-testid="y-axis" />
@@ -150,5 +165,14 @@ describe("TimeSeriesChart", () => {
   it("renders a Legend for S/I/R/D series (FIX 3 — WCAG 1.4.1 non-color differentiation)", () => {
     render(<TimeSeriesChart ticks={SAMPLE_TICKS} />)
     expect(screen.getByTestId("legend")).toBeDefined()
+  })
+
+  it("XAxis tickFormatter rounds IEEE-754 noisy day values to integer strings — SIM7.1-b", () => {
+    render(<TimeSeriesChart ticks={SAMPLE_TICKS} />)
+    const xAxis = screen.getByTestId("x-axis")
+    // Formatter must exist
+    expect(xAxis.getAttribute("data-has-tick-formatter")).toBe("true")
+    // 24.000000000000007 → "24"
+    expect(xAxis.getAttribute("data-tick-formatter-sample")).toBe("24")
   })
 })

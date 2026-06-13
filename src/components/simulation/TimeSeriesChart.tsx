@@ -62,10 +62,12 @@ export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
           dataKey="day"
           tick={{ fontSize: 11 }}
           label={{ value: "Day", position: "insideBottomRight", offset: -4, fontSize: 11 }}
+          tickFormatter={(value) => Math.round(Number(value)).toString()}
         />
         <YAxis tick={{ fontSize: 11 }} width={40} />
         <Tooltip
           contentStyle={{ fontSize: 12 }}
+          labelFormatter={(label) => `Day ${Math.round(Number(label))}`}
           formatter={(value, name) => [
             typeof value === "number" ? value.toFixed(1) : String(value),
             String(name).toUpperCase(),
