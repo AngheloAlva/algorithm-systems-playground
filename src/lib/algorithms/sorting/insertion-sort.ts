@@ -61,9 +61,9 @@ export function insertionSort(arr: ReadonlyArray<number>): SortTraceResult {
 			comparisons++
 
 			if (working[j] > key) {
-				// SWAP step — shift element right
+				// PLACE step — shift element one position right (one-sided write, not a swap)
 				working[j + 1] = working[j]
-				steps.push({ kind: SORT_STEP_KIND.SWAP, indices: [j, j + 1], pseudocodeLine: 5 })
+				steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [j + 1], value: working[j], pseudocodeLine: 5 })
 				swaps++
 				j--
 			} else {
@@ -72,8 +72,9 @@ export function insertionSort(arr: ReadonlyArray<number>): SortTraceResult {
 			}
 		}
 
-		// Place the key in its correct position
+		// PLACE step — write key into its correct position
 		working[j + 1] = key
+		steps.push({ kind: SORT_STEP_KIND.PLACE, indices: [j + 1], value: key, pseudocodeLine: 7 })
 	}
 
 	steps.push({ kind: SORT_STEP_KIND.DONE, indices: [], pseudocodeLine: 8 })

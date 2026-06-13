@@ -23,6 +23,7 @@ import { bubbleSort } from "./bubble-sort"
 import { mergeSort } from "./merge-sort"
 import { quickSort } from "./quick-sort"
 import { heapSort } from "./heap-sort"
+import { insertionSort } from "./insertion-sort"
 
 // ---------------------------------------------------------------------------
 // applyStep unit tests
@@ -259,4 +260,32 @@ describe("replayTo — intermediate cursors produce valid intermediate states", 
 			expect(result).toEqual(refArr)
 		}
 	})
+
+	it("insertion sort: state at cursor k matches reference replay", () => {
+		const input = [5, 3, 1, 4, 2]
+		const frozenInput = Object.freeze([...input])
+		const trace = insertionSort(frozenInput)
+		const refArr = [...frozenInput]
+		for (let k = 0; k < Math.min(trace.steps.length, 15); k++) {
+			applyStep(refArr, trace.steps[k])
+			const result = replayTo(frozenInput, trace.steps, k)
+			expect(result).toEqual(refArr)
+		}
+	})
+})
+
+describe("replayTo — insertion sort traces reach sorted state at final cursor", () => {
+	for (const input of INPUTS) {
+		it(`input=${JSON.stringify(input)}`, () => {
+			const frozenInput = Object.freeze([...input])
+			const trace = insertionSort(frozenInput)
+			const lastCursor = trace.steps.length - 1
+			if (lastCursor < 0) {
+				expect(frozenInput).toEqual([])
+				return
+			}
+			const result = replayTo(frozenInput, trace.steps, lastCursor)
+			expect(result).toEqual(sorted(frozenInput))
+		})
+	}
 })
