@@ -30,6 +30,20 @@ import { advance } from "@/lib/animation/stepper"
 import { getMsPerStep } from "@/lib/animation/speed-config"
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum simulation steps that may fire in a single rAF frame.
+ *
+ * Without this cap, a backgrounded-then-refocused tab can produce a massive
+ * elapsed delta (seconds or minutes), causing thousands of synchronous step()
+ * calls in one frame and locking the UI. Mirrors the `remaining` cap pattern
+ * used in useStepPlayer.
+ */
+const MAX_STEPS_PER_FRAME = 600
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -77,7 +91,10 @@ export function useSimulationLoop({ speed, isRunning, step }: UseSimulationLoopO
       lastTimeRef.current = timestamp
 
       const msPerStep = getMsPerStep(speedRef.current)
-      const { steps, nextAcc } = advance(accRef.current, elapsedMs, 1, msPerStep)
+      // Pass MAX_STEPS_PER_FRAME as the `remaining` cap to advance() so that
+      // a huge elapsed delta (backgrounded tab) never causes thousands of
+      // synchronous step() calls in one frame. Pattern mirrors useStepPlayer.
+      const { steps, nextAcc } = advance(accRef.current, elapsedMs, 1, msPerStep, MAX_STEPS_PER_FRAME)
       accRef.current = nextAcc
 
       // Call store's step() once per sim-dt

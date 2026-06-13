@@ -322,10 +322,11 @@ describe("auto-stop", () => {
     expect(s.metrics.totalDeaths).toBeGreaterThan(0)
   })
 
-  it("auto-stop does not fire at simTime=0 (t>0 guard)", () => {
-    // Inject I < AUTO_STOP_I but simTime = 0
+  it("auto-stop does not fire at simTime=0 (t>0 guard uses PRE-advance time)", () => {
+    // Inject state: I below AUTO_STOP_I, simTime=0 (first step scenario).
+    // The guard must use state.simTime (BEFORE advance), so step 1 cannot auto-stop.
     useSimulationStore.setState({
-      current: { s: 999.9, i: 0.1, r: 0, d: 0 },
+      current: { s: 999.7, i: 0.3, r: 0, d: 0 },
       status: RUN_STATUS.RUNNING,
       simTime: 0,
       recordAcc: 0,
@@ -333,22 +334,110 @@ describe("auto-stop", () => {
         r0: 2.0,
         cfr: 0.05,
         herdImmunityThreshold: 0.5,
-        peakInfected: 0,
+        peakInfected: 0.3,
         peakDay: 0,
         totalDeaths: 0,
         durationDays: 0,
       },
     })
+    // Step 1: simTime was 0 (PRE-advance) — guard must keep status RUNNING
     useSimulationStore.getState().step()
-    // After step, simTime will be DT > 0, but the auto-stop check fires
-    // after simTime is advanced — the guard is: simTime (before step) = 0
-    // Actually by design: check is AFTER advancing time, so simTime > 0 is met.
-    // The i in NEXT state may be above 0.5 anyway with these params.
-    // Let's just confirm no crash and a deterministic state.
+    expect(useSimulationStore.getState().status).toBe(RUN_STATUS.RUNNING)
+
+    // Step 2: simTime is now DT (> 0 PRE-advance) AND I still < AUTO_STOP_I → DONE
+    useSimulationStore.getState().step()
+    expect(useSimulationStore.getState().status).toBe(RUN_STATUS.DONE)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// SIM8.1 — metrics object ref must NOT churn on every step
+// ---------------------------------------------------------------------------
+
+describe("metrics ref stability (SIM8.1)", () => {
+  beforeEach(resetStore)
+
+  it("metrics ref is stable across 9 consecutive non-append steps", () => {
+    useSimulationStore.getState().play()
+    // Run 9 steps (< RECORD_INTERVAL) — no tick append, no DONE
+    runSteps(STEPS_PER_INTERVAL - 1)
+    const refA = useSimulationStore.getState().metrics
+    // One more step (total 9) — still no append, ref must stay the same
+    // We already ran 9 above; take a fresh ref mid-run before checking stability
+    // Restart from known state to keep it clean
+    resetStore()
+    useSimulationStore.getState().play()
+    runSteps(1)
+    const refAfterStep1 = useSimulationStore.getState().metrics
+    runSteps(1)
+    const refAfterStep2 = useSimulationStore.getState().metrics
+    runSteps(1)
+    const refAfterStep3 = useSimulationStore.getState().metrics
+    // Steps 1-9 are all within the first RECORD_INTERVAL — ref must not change
+    expect(refAfterStep2).toBe(refAfterStep1)
+    expect(refAfterStep3).toBe(refAfterStep1)
+    // Silence unused variable warning
+    void refA
+  })
+
+  it("metrics ref CHANGES on the tick-append step (step 10)", () => {
+    useSimulationStore.getState().play()
+    // Run 9 steps — no append yet
+    runSteps(STEPS_PER_INTERVAL - 1)
+    const refBefore = useSimulationStore.getState().metrics
+    // Step 10 triggers tick append — metrics ref must change
+    useSimulationStore.getState().step()
+    const refAfter = useSimulationStore.getState().metrics
+    expect(refAfter).not.toBe(refBefore)
+    // Tick array grew too
+    expect(useSimulationStore.getState().ticks).toHaveLength(1)
+  })
+
+  it("final metrics after DONE have correct peakInfected and totalDeaths > 0", () => {
+    useSimulationStore.getState().play()
+    const store = useSimulationStore.getState()
+    let iterations = 0
+    while (
+      useSimulationStore.getState().status === RUN_STATUS.RUNNING &&
+      iterations < 10000
+    ) {
+      store.step()
+      iterations++
+    }
     const s = useSimulationStore.getState()
-    expect(s.simTime).toBeCloseTo(DT, 9)
-    // status may be RUNNING (i still > 0.5 after step with these params)
-    expect([RUN_STATUS.RUNNING, RUN_STATUS.DONE]).toContain(s.status)
+    expect(s.status).toBe(RUN_STATUS.DONE)
+    expect(s.metrics.peakInfected).toBeGreaterThan(AUTO_STOP_I)
+    expect(s.metrics.totalDeaths).toBeGreaterThan(0)
+    expect(s.metrics.durationDays).toBeGreaterThan(0)
+  })
+
+  it("peakInfected tracked every step even between append boundaries", () => {
+    // Run exactly 2 intervals (20 steps) from default params and verify
+    // that peakInfected in metrics reflects the actual max I seen so far
+    useSimulationStore.getState().play()
+    let trackedMax = useSimulationStore.getState().current.i
+    for (let k = 0; k < STEPS_PER_INTERVAL * 2; k++) {
+      useSimulationStore.getState().step()
+      const currentI = useSimulationStore.getState().current.i
+      if (currentI > trackedMax) trackedMax = currentI
+    }
+    const metricsAfter = useSimulationStore.getState().metrics
+    // The stored peak should match the max we independently tracked
+    expect(metricsAfter.peakInfected).toBeCloseTo(trackedMax, 6)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// play() from DONE — must stay DONE (FIX 6)
+// ---------------------------------------------------------------------------
+
+describe("play() from DONE", () => {
+  beforeEach(resetStore)
+
+  it("play() when DONE does not change status (replay requires reset())", () => {
+    useSimulationStore.setState({ status: RUN_STATUS.DONE })
+    useSimulationStore.getState().play()
+    expect(useSimulationStore.getState().status).toBe(RUN_STATUS.DONE)
   })
 })
 

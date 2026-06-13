@@ -53,7 +53,24 @@ export interface SimulationState {
   ticks: SeriesPoint[]
   simTime: number
   recordAcc: number
+  /**
+   * Derived metrics for the metrics panel.
+   *
+   * Live-update cadence (SIM8.1): this object reference changes ONLY on
+   * tick-append (every RECORD_INTERVAL steps) and on the DONE transition.
+   * Between those events the reference is stable — selectSimMetrics subscribers
+   * do NOT re-render on every step.
+   *
+   * Values are progressively accurate during the run; final and exact at DONE.
+   */
   metrics: SIRMetrics
+
+  // Running peak accumulators — updated every step but kept OUTSIDE metrics
+  // to avoid churning the metrics object reference (SIM8.1).
+  /** Running max I seen so far; materialized into metrics only on append/DONE. */
+  _peakInfected: number
+  /** Day at which _peakInfected was reached. */
+  _peakDay: number
 
   // Param actions — each resets+replays from t=0 (locked product rule)
   setParam: (key: keyof SIRParams, value: number) => void
@@ -80,6 +97,8 @@ interface SimulationData {
   simTime: number
   recordAcc: number
   metrics: SIRMetrics
+  _peakInfected: number
+  _peakDay: number
 }
 
 // ---------------------------------------------------------------------------
@@ -101,12 +120,14 @@ function buildData(params: SIRParams): SimulationData {
   return {
     params,
     speed: DEFAULT_SPEED,
-    status: RUN_STATUS.IDLE as RunStatus,
+    status: RUN_STATUS.IDLE,
     current: initialState(params),
     ticks: [] as SeriesPoint[],
     simTime: 0,
     recordAcc: 0,
     metrics: buildMetrics(params),
+    _peakInfected: params.i0,
+    _peakDay: 0,
   }
 }
 
@@ -135,12 +156,14 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
     set({
       params,
       speed,
-      status: RUN_STATUS.IDLE as RunStatus,
+      status: RUN_STATUS.IDLE,
       current: initialState(params),
       ticks: [] as SeriesPoint[],
       simTime: 0,
       recordAcc: 0,
       metrics: buildMetrics(params),
+      _peakInfected: params.i0,
+      _peakDay: 0,
     })
   },
 
@@ -159,23 +182,25 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
   play() {
     if (get().status === RUN_STATUS.RUNNING) return
     if (get().status === RUN_STATUS.DONE) return
-    set({ status: RUN_STATUS.RUNNING as RunStatus })
+    set({ status: RUN_STATUS.RUNNING })
   },
 
   pause() {
     if (get().status !== RUN_STATUS.RUNNING) return
-    set({ status: RUN_STATUS.PAUSED as RunStatus })
+    set({ status: RUN_STATUS.PAUSED })
   },
 
   reset() {
     const params = get().params
     set({
-      status: RUN_STATUS.IDLE as RunStatus,
+      status: RUN_STATUS.IDLE,
       current: initialState(params),
       ticks: [] as SeriesPoint[],
       simTime: 0,
       recordAcc: 0,
       metrics: buildMetrics(params),
+      _peakInfected: params.i0,
+      _peakDay: 0,
     })
   },
 
@@ -200,10 +225,20 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
     const nextSimTime = state.simTime + DT
     let nextRecordAcc = state.recordAcc + DT
 
-    let nextTicks = state.ticks
+    // Update running peak accumulators (always tracked, outside metrics object).
+    let nextPeakInfected = state._peakInfected
+    let nextPeakDay = state._peakDay
+    if (nextState.i > nextPeakInfected) {
+      nextPeakInfected = nextState.i
+      nextPeakDay = nextSimTime
+    }
+
     // Use RECORD_INTERVAL - 1e-10 to tolerate IEEE 754 float drift
     // (e.g. 10 × 0.1 = 0.9999999999999999, not exactly 1.0).
-    if (nextRecordAcc >= RECORD_INTERVAL - 1e-10) {
+    const isAppendStep = nextRecordAcc >= RECORD_INTERVAL - 1e-10
+
+    let nextTicks = state.ticks
+    if (isAppendStep) {
       const point: SeriesPoint = {
         day: nextSimTime,
         s: nextState.s,
@@ -215,19 +250,14 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
       nextRecordAcc = nextRecordAcc - RECORD_INTERVAL
     }
 
-    // Peak tracking (incremental)
-    let { peakInfected, peakDay } = state.metrics
-    if (nextState.i > peakInfected) {
-      peakInfected = nextState.i
-      peakDay = nextSimTime
-    }
-
-    // Auto-stop check: I < AUTO_STOP_I AND simTime > 0
-    if (nextState.i < AUTO_STOP_I && nextSimTime > 0) {
+    // Auto-stop check: I < AUTO_STOP_I AND state.simTime > 0 (PRE-advance time).
+    // Using state.simTime (before this step) ensures the guard cannot fire on
+    // the very first step (simTime=0), even if I started below AUTO_STOP_I. ADR-6.
+    if (nextState.i < AUTO_STOP_I && state.simTime > 0) {
       const finalMetrics: SIRMetrics = {
         ...deriveMetrics(state.params),
-        peakInfected,
-        peakDay,
+        peakInfected: nextPeakInfected,
+        peakDay: nextPeakDay,
         totalDeaths: nextState.d,
         durationDays: nextSimTime,
       }
@@ -236,28 +266,44 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
         simTime: nextSimTime,
         recordAcc: nextRecordAcc,
         ticks: nextTicks,
+        _peakInfected: nextPeakInfected,
+        _peakDay: nextPeakDay,
         metrics: finalMetrics,
-        status: RUN_STATUS.DONE as RunStatus,
+        status: RUN_STATUS.DONE,
       })
       return
     }
 
-    // Still running — update state
-    const nextMetrics: SIRMetrics = {
-      ...state.metrics,
-      peakInfected,
-      peakDay,
-      totalDeaths: nextState.d,
-      durationDays: nextSimTime,
+    // Still running — only rebuild metrics on tick-append steps (SIM8.1).
+    // On non-append steps: omit metrics from set() so the reference stays stable
+    // and selectSimMetrics subscribers do NOT re-render.
+    if (isAppendStep) {
+      const appendMetrics: SIRMetrics = {
+        ...deriveMetrics(state.params),
+        peakInfected: nextPeakInfected,
+        peakDay: nextPeakDay,
+        totalDeaths: nextState.d,
+        durationDays: nextSimTime,
+      }
+      set({
+        current: nextState,
+        simTime: nextSimTime,
+        recordAcc: nextRecordAcc,
+        ticks: nextTicks,
+        _peakInfected: nextPeakInfected,
+        _peakDay: nextPeakDay,
+        metrics: appendMetrics,
+      })
+    } else {
+      // Non-append step: do NOT include metrics — keep same reference (SIM8.1).
+      set({
+        current: nextState,
+        simTime: nextSimTime,
+        recordAcc: nextRecordAcc,
+        _peakInfected: nextPeakInfected,
+        _peakDay: nextPeakDay,
+      })
     }
-
-    set({
-      current: nextState,
-      simTime: nextSimTime,
-      recordAcc: nextRecordAcc,
-      ticks: nextTicks,
-      metrics: nextMetrics,
-    })
   },
 }))
 
@@ -268,14 +314,34 @@ export const useSimulationStore = create<SimulationState>()((set, get) => ({
 /** Select URL-serializable params for codec sync. */
 export const selectSimUrlState = (s: SimulationState) => s.params
 
-/** Select derived metrics for the metrics panel. */
+/**
+ * Select derived metrics for the metrics panel.
+ *
+ * Live-update cadence (SIM8.1): the metrics object reference changes ONLY on
+ * tick-append (every RECORD_INTERVAL steps) and on the DONE transition.
+ * Values are progressively accurate during the run; final and exact at DONE.
+ * Safe to use as a plain selector — no useShallow needed.
+ */
 export const selectSimMetrics = (s: SimulationState) => s.metrics
 
 /** Select downsampled ticks for charts (changes only on append). */
 export const selectTicks = (s: SimulationState) => s.ticks
 
-/** Select playback status and speed (use with useShallow). */
+/**
+ * Select playback status and speed as an object.
+ *
+ * IMPORTANT: this selector returns a NEW object on every call. It MUST be
+ * used with `useShallow` from `zustand/react/shallow` to avoid unnecessary
+ * re-renders. Prefer the primitive selectors `selectStatus` / `selectSpeed`
+ * when only one field is needed.
+ */
 export const selectPlayback = (s: SimulationState) => ({
   status: s.status,
   speed: s.speed,
 })
+
+/** Primitive selector for playback status — no useShallow needed. */
+export const selectStatus = (s: SimulationState) => s.status
+
+/** Primitive selector for speed — no useShallow needed. */
+export const selectSpeed = (s: SimulationState) => s.speed

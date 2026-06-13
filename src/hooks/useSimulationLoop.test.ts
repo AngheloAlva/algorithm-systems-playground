@@ -120,25 +120,31 @@ describe("useSimulationLoop", () => {
 
   it("speed change takes effect on the next frame without restarting rAF", () => {
     const step = vi.fn()
+    const requestAnimationFrameMock = vi.mocked(window.requestAnimationFrame)
     const { rerender } = renderHook(
       ({ speed }: { speed: number }) =>
         useSimulationLoop({ speed, isRunning: true, step }),
       { initialProps: { speed: 4 } }
     )
 
+    // Frame 1: establishes lastTimeRef baseline (elapsedMs = 0, no steps fired)
     act(() => {
-      flushRaf(16) // baseline frame
+      flushRaf(16)
     })
     const callsAtSpeed4 = step.mock.calls.length
+    const rafCallsBeforeSpeedChange = requestAnimationFrameMock.mock.calls.length
 
-    // Change speed — must NOT cancel/restart rAF
+    // Change speed — must NOT cancel/restart rAF (no extra requestAnimationFrame call)
     rerender({ speed: 8 })
+    const rafCallsAfterSpeedChange = requestAnimationFrameMock.mock.calls.length
+    // Speed change alone must not trigger an extra rAF scheduling
+    expect(rafCallsAfterSpeedChange).toBe(rafCallsBeforeSpeedChange)
 
     act(() => {
-      flushRaf(100) // more elapsed → speed 8 produces more calls than speed 4
+      flushRaf(100) // 100ms elapsed — speed 8 produces more steps than speed 4 would
     })
 
-    // Step was called before and after the speed change in the same loop
+    // Steps accumulated across both speeds in the same continuous loop
     expect(step.mock.calls.length).toBeGreaterThan(callsAtSpeed4)
   })
 
@@ -191,6 +197,25 @@ describe("useSimulationLoop", () => {
 
     // cancelAnimationFrame must have been called at least once on unmount
     expect(cancelAnimationFrame).toHaveBeenCalled()
+  })
+
+  // -------------------------------------------------------------------------
+  // MAX_STEPS_PER_FRAME clamp (FIX 4) — backgrounded-tab defense
+  // -------------------------------------------------------------------------
+
+  it("a very large elapsed delta never triggers more than MAX_STEPS_PER_FRAME steps", () => {
+    const step = vi.fn()
+    renderHook(() =>
+      useSimulationLoop({ speed: 8, isRunning: true, step })
+    )
+    act(() => {
+      flushRaf(16)       // frame 1: establishes baseline
+      flushRaf(100000)   // frame 2: 100 s elapsed — would be millions of steps unclamped
+    })
+    // MAX_STEPS_PER_FRAME = 600; total calls must be at most 600 (frame 2 only)
+    // Frame 1 may produce a few calls at speed 8 (1ms/step, elapsed=0), so we give
+    // a small buffer but ensure the catastrophic case is prevented.
+    expect(step.mock.calls.length).toBeLessThanOrEqual(600)
   })
 
   // -------------------------------------------------------------------------
