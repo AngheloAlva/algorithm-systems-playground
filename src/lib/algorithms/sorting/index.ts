@@ -18,6 +18,7 @@ import { bubbleSort, bubbleSortPseudocode } from "./bubble-sort"
 import { quickSort, quickSortPseudocode } from "./quick-sort"
 import { mergeSort, mergeSortPseudocode } from "./merge-sort"
 import { heapSort, heapSortPseudocode } from "./heap-sort"
+import { insertionSort, insertionSortPseudocode } from "./insertion-sort"
 
 // ---------------------------------------------------------------------------
 // SortAlgorithm union type — const-then-type pattern (typescript skill)
@@ -25,6 +26,7 @@ import { heapSort, heapSortPseudocode } from "./heap-sort"
 
 export const SORT_ALGORITHM = {
 	BUBBLE: "bubble",
+	INSERTION: "insertion",
 	QUICK: "quick",
 	MERGE: "merge",
 	HEAP: "heap",
@@ -55,6 +57,11 @@ export const SORT_ALGORITHM_REGISTRY: Record<SortAlgorithm, SortAlgorithmEntry> 
 		pseudocode: bubbleSortPseudocode,
 		label: "Bubble Sort",
 	},
+	insertion: {
+		run: insertionSort,
+		pseudocode: insertionSortPseudocode,
+		label: "Insertion Sort",
+	},
 	quick: {
 		run: quickSort,
 		pseudocode: quickSortPseudocode,
@@ -77,6 +84,7 @@ export const SORT_ALGORITHM_REGISTRY: Record<SortAlgorithm, SortAlgorithmEntry> 
 // ---------------------------------------------------------------------------
 
 export { bubbleSort, bubbleSortPseudocode } from "./bubble-sort"
+export { insertionSort, insertionSortPseudocode } from "./insertion-sort"
 export { quickSort, quickSortPseudocode } from "./quick-sort"
 export { mergeSort, mergeSortPseudocode } from "./merge-sort"
 export { heapSort, heapSortPseudocode } from "./heap-sort"

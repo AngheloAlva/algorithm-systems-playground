@@ -15,6 +15,10 @@ describe("SORT_ALGORITHM", () => {
 		expect(SORT_ALGORITHM.BUBBLE).toBe("bubble")
 	})
 
+	it("has INSERTION member", () => {
+		expect(SORT_ALGORITHM.INSERTION).toBe("insertion")
+	})
+
 	it("has QUICK member", () => {
 		expect(SORT_ALGORITHM.QUICK).toBe("quick")
 	})
@@ -29,13 +33,13 @@ describe("SORT_ALGORITHM", () => {
 })
 
 describe("SORT_ALGORITHM_REGISTRY", () => {
-	it("has exactly 4 entries", () => {
+	it("has exactly 5 entries", () => {
 		const keys = Object.keys(SORT_ALGORITHM_REGISTRY)
-		expect(keys).toHaveLength(4)
+		expect(keys).toHaveLength(5)
 	})
 
 	it("has an entry for each SortAlgorithm value", () => {
-		const algorithms: SortAlgorithm[] = ["bubble", "quick", "merge", "heap"]
+		const algorithms: SortAlgorithm[] = ["bubble", "insertion", "quick", "merge", "heap"]
 		for (const alg of algorithms) {
 			expect(SORT_ALGORITHM_REGISTRY[alg]).toBeDefined()
 		}
