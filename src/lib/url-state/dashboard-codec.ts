@@ -83,6 +83,7 @@ function parseSeed(raw: string | null): number | null {
 // Codec implementation
 // ---------------------------------------------------------------------------
 
+// URL keys "len"/"mode"/"seed" follow the design doc (overrides spec CODEC-1 short forms "l"/"m").
 export const dashboardCodec: StateCodec<DashboardUrlState> = {
   encode(state: DashboardUrlState): URLSearchParams {
     const params = new URLSearchParams()

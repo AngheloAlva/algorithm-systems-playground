@@ -201,5 +201,25 @@ describe("dashboardCodec", () => {
       const decoded = dashboardCodec.decode(params)
       expect(decoded.seed).toBe(42)
     })
+
+    it("round-trips seed=0 (falsy zero must not fall back to default 42)", () => {
+      // Encodes {arrayLength:50, arrayMode:RANDOM, seed:0}; seed=0 is non-default
+      // so the 'seed' key must be present in params and decoded back as exactly 0.
+      const original: DashboardUrlState = {
+        arrayLength: 50,
+        arrayMode: ARRAY_MODE.RANDOM,
+        seed: 0,
+      }
+      const encoded = dashboardCodec.encode(original)
+      expect(encoded.has("seed")).toBe(true)
+      const decoded = dashboardCodec.decode(encoded)
+      expect(decoded.seed).toBe(0)
+    })
+
+    it("falls back to default arrayLength when len is a float (5.5)", () => {
+      const params = new URLSearchParams("len=5.5")
+      const decoded = dashboardCodec.decode(params)
+      expect(decoded.arrayLength).toBe(DASHBOARD_DEFAULTS.arrayLength)
+    })
   })
 })

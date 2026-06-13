@@ -73,6 +73,13 @@ describe("useDashboardStore", () => {
       getState().setArrayLength(200)
       expect(useDashboardStore.getState().arrayLength).toBe(200)
     })
+
+    it("populates snapshot (not null) and sets status to DONE after call", () => {
+      getState().setArrayLength(100)
+      const state = useDashboardStore.getState()
+      expect(state.snapshot).not.toBeNull()
+      expect(state.status).toBe(RUN_STATUS.DONE)
+    })
   })
 
   // ---------------------------------------------------------------------------
@@ -83,6 +90,13 @@ describe("useDashboardStore", () => {
     it("updates arrayMode", () => {
       getState().setArrayMode("reversed")
       expect(useDashboardStore.getState().arrayMode).toBe("reversed")
+    })
+
+    it("populates snapshot (not null) and sets status to DONE after call", () => {
+      getState().setArrayMode("sorted")
+      const state = useDashboardStore.getState()
+      expect(state.snapshot).not.toBeNull()
+      expect(state.status).toBe(RUN_STATUS.DONE)
     })
   })
 
@@ -96,6 +110,19 @@ describe("useDashboardStore", () => {
       getState().regenerate()
       const after = useDashboardStore.getState().seed
       expect(after).not.toBe(before)
+    })
+
+    it("increments seed by exactly 1", () => {
+      const before = useDashboardStore.getState().seed
+      getState().regenerate()
+      expect(useDashboardStore.getState().seed).toBe(before + 1)
+    })
+
+    it("populates snapshot and sweep after call (recompute ran)", () => {
+      getState().regenerate()
+      const state = useDashboardStore.getState()
+      expect(state.snapshot).not.toBeNull()
+      expect(state.sweep).not.toBeNull()
     })
   })
 
@@ -261,6 +288,23 @@ describe("useDashboardStore", () => {
         expect(typeof point.quick).toBe("number")
         expect(typeof point.merge).toBe("number")
         expect(typeof point.heap).toBe("number")
+      }
+    })
+
+    it("each algorithm series value is > 0 for RANDOM mode (guards registry drop)", () => {
+      // Sweep uses RANDOM mode by default (DASHBOARD_STORE_DEFAULTS.arrayMode).
+      // All SWEEP_SIZES are >= 10, so every algorithm must produce > 0 comparisons.
+      // This catches a future registry drop that the ?? 0 fallback would otherwise silence.
+      getState().recompute()
+      const data = selectSweepChartData(useDashboardStore.getState())
+      expect(data).not.toBeNull()
+      for (const point of data!) {
+        expect(point.n).toBeGreaterThanOrEqual(10)
+        expect(point.bubble).toBeGreaterThan(0)
+        expect(point.insertion).toBeGreaterThan(0)
+        expect(point.quick).toBeGreaterThan(0)
+        expect(point.merge).toBeGreaterThan(0)
+        expect(point.heap).toBeGreaterThan(0)
       }
     })
   })
