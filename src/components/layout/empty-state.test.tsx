@@ -76,7 +76,8 @@ describe("MODULES registry", () => {
     const comingSoon = MODULES.filter(
       (m) => m.status === MODULE_STATUS.COMING_SOON
     );
-    // simulation + dashboard remain coming-soon
-    expect(comingSoon).toHaveLength(2);
+    // dashboard remains coming-soon; simulation is now AVAILABLE (T10 flip)
+    expect(comingSoon).toHaveLength(1);
+    expect(comingSoon[0]?.slug).toBe("dashboard");
   });
 });
