@@ -70,7 +70,7 @@ export const MODULES: Module[] = [
     title: "Dashboard",
     description:
       "Compare algorithm performance with real-time metrics and benchmarks.",
-    status: MODULE_STATUS.COMING_SOON,
+    status: MODULE_STATUS.AVAILABLE,
     icon: LayoutDashboardIcon,
   },
 ] as const;

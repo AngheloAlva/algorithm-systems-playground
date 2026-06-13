@@ -72,12 +72,16 @@ describe("MODULES registry", () => {
     expect(availableSlugs).toContain("graphs");
   });
 
-  it("remaining modules are coming-soon", () => {
-    const comingSoon = MODULES.filter(
-      (m) => m.status === MODULE_STATUS.COMING_SOON
+  it("all 4 modules are available (dashboard activated in Slice C)", () => {
+    const available = MODULES.filter(
+      (m) => m.status === MODULE_STATUS.AVAILABLE
     );
-    // dashboard remains coming-soon; simulation is now AVAILABLE (T10 flip)
-    expect(comingSoon).toHaveLength(1);
-    expect(comingSoon[0]?.slug).toBe("dashboard");
+    // pathfinding, graphs, simulation, dashboard — all 4 are AVAILABLE now
+    expect(available).toHaveLength(4);
+    const slugs = available.map((m) => m.slug);
+    expect(slugs).toContain("pathfinding");
+    expect(slugs).toContain("graphs");
+    expect(slugs).toContain("simulation");
+    expect(slugs).toContain("dashboard");
   });
 });
