@@ -23,6 +23,7 @@ import { bubbleSort } from "./bubble-sort"
 import { mergeSort } from "./merge-sort"
 import { quickSort } from "./quick-sort"
 import { heapSort } from "./heap-sort"
+import { insertionSort } from "./insertion-sort"
 
 // ---------------------------------------------------------------------------
 // applyStep unit tests
@@ -259,4 +260,75 @@ describe("replayTo — intermediate cursors produce valid intermediate states", 
 			expect(result).toEqual(refArr)
 		}
 	})
+
+	/**
+	 * Insertion sort intermediate states — pinned literal fixtures.
+	 *
+	 * Input: [5, 3, 1, 4, 2]. Steps are 0-indexed.
+	 *
+	 * Full step trace (verified by running the algorithm):
+	 *   0  COMPARE([0,1])        → [5,3,1,4,2]
+	 *   1  PLACE([1], val=5)     → [5,5,1,4,2]  (shift: arr[1]=5)
+	 *   2  PLACE([0], val=3)     → [3,5,1,4,2]  (insert key=3)
+	 *   3  COMPARE([1,2])        → [3,5,1,4,2]
+	 *   4  PLACE([2], val=5)     → [3,5,5,4,2]  (shift: arr[2]=5)
+	 *   5  COMPARE([0,1])        → [3,5,5,4,2]
+	 *   6  PLACE([1], val=3)     → [3,3,5,4,2]  (shift: arr[1]=3)
+	 *   7  PLACE([0], val=1)     → [1,3,5,4,2]  (insert key=1)
+	 *   8  COMPARE([2,3])        → [1,3,5,4,2]
+	 *   9  PLACE([3], val=5)     → [1,3,5,5,2]  (shift: arr[3]=5)
+	 *  10  COMPARE([1,2])        → [1,3,5,5,2]
+	 *  11  PLACE([2], val=4)     → [1,3,4,5,2]  (insert key=4)
+	 *  12  COMPARE([3,4])        → [1,3,4,5,2]
+	 *  13  PLACE([4], val=5)     → [1,3,4,5,5]  (shift: arr[4]=5)
+	 *  14  COMPARE([2,3])        → [1,3,4,5,5]
+	 *  15  PLACE([3], val=4)     → [1,3,4,4,5]  (shift: arr[3]=4)
+	 *  16  COMPARE([1,2])        → [1,3,4,4,5]
+	 *  17  PLACE([2], val=3)     → [1,3,3,4,5]  (shift: arr[2]=3)
+	 *  18  COMPARE([0,1])        → [1,3,3,4,5]
+	 *  19  PLACE([1], val=2)     → [1,2,3,4,5]  (insert key=2)
+	 *  20  DONE
+	 *
+	 * Why these literals catch the old SWAP bug:
+	 *   At cursor 4, PLACE([2], val=5) correctly writes arr[2]=5 → [3,5,5,4,2].
+	 *   Old SWAP(1,2) would have exchanged arr[1] and arr[2] → [3,1,5,4,2]. ← FAILS.
+	 *   At cursor 6, PLACE([1], val=3) correctly writes arr[1]=3 → [3,3,5,4,2].
+	 *   Old SWAP(0,1) on [3,5,5,4,2] would give [5,3,5,4,2]. ← FAILS.
+	 */
+	it("insertion sort: intermediate state at pinned cursors matches hardcoded literals (shift semantics)", () => {
+		const input = [5, 3, 1, 4, 2]
+		const frozenInput = Object.freeze([...input])
+		const trace = insertionSort(frozenInput)
+
+		// cursor 1: first shift write — arr[1] = 5 (PLACE, not swap)
+		expect(replayTo(frozenInput, trace.steps, 1)).toEqual([5, 5, 1, 4, 2])
+		// cursor 2: key=3 inserted at position 0
+		expect(replayTo(frozenInput, trace.steps, 2)).toEqual([3, 5, 1, 4, 2])
+		// cursor 4: shift for key=1 — arr[2]=5 (PLACE). Old SWAP(1,2) would give [3,1,5,4,2].
+		expect(replayTo(frozenInput, trace.steps, 4)).toEqual([3, 5, 5, 4, 2])
+		// cursor 6: shift continues — arr[1]=3 (PLACE). Old SWAP(0,1) would give [5,3,5,4,2] or similar.
+		expect(replayTo(frozenInput, trace.steps, 6)).toEqual([3, 3, 5, 4, 2])
+		// cursor 7: key=1 inserted at position 0
+		expect(replayTo(frozenInput, trace.steps, 7)).toEqual([1, 3, 5, 4, 2])
+		// cursor 11: key=4 inserted at position 2 (after one shift of 5)
+		expect(replayTo(frozenInput, trace.steps, 11)).toEqual([1, 3, 4, 5, 2])
+		// cursor 19: key=2 fully inserted — nearly sorted
+		expect(replayTo(frozenInput, trace.steps, 19)).toEqual([1, 2, 3, 4, 5])
+	})
+})
+
+describe("replayTo — insertion sort traces reach sorted state at final cursor", () => {
+	for (const input of INPUTS) {
+		it(`input=${JSON.stringify(input)}`, () => {
+			const frozenInput = Object.freeze([...input])
+			const trace = insertionSort(frozenInput)
+			const lastCursor = trace.steps.length - 1
+			if (lastCursor < 0) {
+				expect(frozenInput).toEqual([])
+				return
+			}
+			const result = replayTo(frozenInput, trace.steps, lastCursor)
+			expect(result).toEqual(sorted(frozenInput))
+		})
+	}
 })

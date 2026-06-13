@@ -146,3 +146,76 @@ describe("ArrayMode type", () => {
 		expect(mode).toBe("random")
 	})
 })
+
+// ---------------------------------------------------------------------------
+// PRNG fixture — guards against inadvertent PRNG algorithm swap
+// ---------------------------------------------------------------------------
+
+describe("generateArray — PRNG output fixture (SEED-3)", () => {
+	it("generateArray(10, 'random', 42) returns the exact hardcoded fixture", () => {
+		// Captured from mulberry32(42) Fisher-Yates shuffle of [1..10].
+		// If this test fails, the PRNG implementation changed — update intentionally.
+		expect(generateArray(10, "random", 42)).toEqual([1, 8, 4, 6, 3, 2, 9, 10, 5, 7])
+	})
+})
+
+// ---------------------------------------------------------------------------
+// SEED-1 — Deterministic RANDOM mode with seed
+// ---------------------------------------------------------------------------
+
+describe("generateArray — seeded RANDOM mode (SEED-1)", () => {
+	it("same seed + length produces identical arrays (seed=42, length=10)", () => {
+		const a = generateArray(10, "random", 42)
+		const b = generateArray(10, "random", 42)
+		expect(a).toEqual(b)
+	})
+
+	it("different seeds produce different arrays (seed=1 vs seed=2, length=50)", () => {
+		const a = generateArray(50, "random", 1)
+		const b = generateArray(50, "random", 2)
+		expect(a).not.toEqual(b)
+	})
+
+	it("seeded array has correct length", () => {
+		const result = generateArray(20, "random", 42)
+		expect(result).toHaveLength(20)
+	})
+
+	it("seeded array values are in range [1, length]", () => {
+		const n = 30
+		const result = generateArray(n, "random", 42)
+		for (const v of result) {
+			expect(v).toBeGreaterThanOrEqual(1)
+			expect(v).toBeLessThanOrEqual(n)
+		}
+	})
+})
+
+// ---------------------------------------------------------------------------
+// SEED-2 — Two-argument form unchanged
+// ---------------------------------------------------------------------------
+
+describe("generateArray — two-argument form unchanged (SEED-2)", () => {
+	it("generateArray(20, 'sorted') still returns [1..20]", () => {
+		const result = generateArray(20, "sorted")
+		expect(result).toEqual(Array.from({ length: 20 }, (_, i) => i + 1))
+	})
+
+	it("SORTED mode with seed returns same as without seed", () => {
+		const withSeed = generateArray(10, "sorted", 42)
+		const withoutSeed = generateArray(10, "sorted")
+		expect(withSeed).toEqual(withoutSeed)
+	})
+
+	it("REVERSED mode with seed returns same as without seed", () => {
+		const withSeed = generateArray(10, "reversed", 99)
+		const withoutSeed = generateArray(10, "reversed")
+		expect(withSeed).toEqual(withoutSeed)
+	})
+
+	it("FEW_UNIQUE mode with seed returns same as without seed", () => {
+		const withSeed = generateArray(10, "few-unique", 7)
+		const withoutSeed = generateArray(10, "few-unique")
+		expect(withSeed).toEqual(withoutSeed)
+	})
+})
