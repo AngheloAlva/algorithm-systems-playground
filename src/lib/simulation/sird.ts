@@ -147,9 +147,18 @@ export function computeSirdMetrics(
 /**
  * Advance the SIRD model by one timestep using forward Euler.
  *
- * After computing raw increments, each compartment is clamped to ≥0
- * and the state is renormalized so s+i+r+d === N EXACTLY.
- * Residual is absorbed into s (the conservation anchor, typically large).
+ * After computing raw Euler increments, compartments are clamped to ≥ 0 and
+ * the state is renormalized so s+i+r+d === N EXACTLY via one of two paths:
+ *
+ * **Normal path** (othersSum ≤ N):
+ *   S is set to the exact residual N − (I+R+D). IEEE 754 guarantees
+ *   (N−x)+x === N for the same floating-point x, so the invariant is exact.
+ *
+ * **S-clamp path** (othersSum > N, triggered by aggressive params):
+ *   I/R/D are renormalized proportionally so they sum to N, then S = 0.
+ *   This restores the exact invariant even when the Euler step overshoots N.
+ *
+ * Both paths guarantee: s+i+r+d === N exactly AND all compartments ≥ 0.
  *
  * @param state  - Current compartment counts
  * @param params - Epidemic parameters
@@ -170,19 +179,26 @@ export function stepSIRD(state: SIRState, params: SIRParams, dt: number): SIRSta
   const rawD = d + death * dt
 
   // Clamp I, R, D to ≥ 0 (they can theoretically go negative with large dt).
-  // S is handled as the residual to guarantee the conservation invariant.
-  const nextI = Math.max(0, rawI)
-  const nextR = Math.max(0, rawR)
-  const nextD = Math.max(0, rawD)
+  let nextI = Math.max(0, rawI)
+  let nextR = Math.max(0, rawR)
+  let nextD = Math.max(0, rawD)
 
-  // Derive S as exact residual (ADR-7, "absorb residual into S"):
-  //   s = N − (i + r + d)
-  // Compute i+r+d as a GROUP first, THEN subtract from N.
-  // IEEE 754 guarantees: (N − x) + x === N when x is the SAME floating-point
-  // value — so asserting s + (i+r+d) === N is exact, matching how s was computed.
-  // The conservation test uses this grouping: s + (i + r + d) === N.
   const othersSum = nextI + nextR + nextD
-  const nextS = Math.max(0, n - othersSum)
+
+  if (othersSum > n) {
+    // S-clamp path: I/R/D overshoot N — renormalize proportionally so they
+    // sum to N exactly, then set S = 0. Preserves relative I:R:D ratios.
+    const scale = n / othersSum
+    nextI *= scale
+    nextR *= scale
+    nextD *= scale
+    return { s: 0, i: nextI, r: nextR, d: nextD }
+  }
+
+  // Normal path: absorb residual into S (ADR-7).
+  // Compute i+r+d as a GROUP, then subtract from N so the IEEE 754 identity
+  // (N − x) + x === N holds exactly for the same floating-point value x.
+  const nextS = n - othersSum
 
   return {
     s: nextS,

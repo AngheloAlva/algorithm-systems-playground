@@ -107,6 +107,88 @@ describe("simulationCodec decode fallbacks (SIM5.2-c)", () => {
 })
 
 // ---------------------------------------------------------------------------
+// FIX 2 — zero-value round-trips (SIM1.7-a/c/d, SIM5.3)
+// mu=0, gamma=0, i0=0 are spec-valid; they must round-trip to the SAME value,
+// not fall back to defaults.
+// ---------------------------------------------------------------------------
+
+describe("simulationCodec zero-value round-trips (FIX2)", () => {
+  it("mu=0 round-trips to 0 (not default)", () => {
+    const encoded = simulationCodec.encode({ ...SIMULATION_CODEC_DEFAULTS, mu: 0 })
+    const decoded = simulationCodec.decode(encoded)
+    expect(decoded.mu).toBe(0)
+  })
+
+  it("gamma=0 round-trips to 0 (not default)", () => {
+    const encoded = simulationCodec.encode({ ...SIMULATION_CODEC_DEFAULTS, gamma: 0 })
+    const decoded = simulationCodec.decode(encoded)
+    expect(decoded.gamma).toBe(0)
+  })
+
+  it("i0=0 round-trips to 0 (not default)", () => {
+    const encoded = simulationCodec.encode({ ...SIMULATION_CODEC_DEFAULTS, i0: 0 })
+    const decoded = simulationCodec.decode(encoded)
+    expect(decoded.i0).toBe(0)
+  })
+
+  it("?m=0 decode → mu === 0 (not 0.005 default)", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("m=0"))
+    expect(decoded.mu).toBe(0)
+  })
+
+  it("?g=0 decode → gamma === 0 (not 0.1 default)", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("g=0"))
+    expect(decoded.gamma).toBe(0)
+  })
+
+  it("?i0=0 decode → i0 === 0 (not 1 default)", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("i0=0"))
+    expect(decoded.i0).toBe(0)
+  })
+
+  it("negative mu still falls back to default (rejection still works)", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("m=-1"))
+    expect(decoded.mu).toBe(SIMULATION_CODEC_DEFAULTS.mu)
+  })
+
+  it("NaN gamma still falls back to default", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("g=notanumber"))
+    expect(decoded.gamma).toBe(SIMULATION_CODEC_DEFAULTS.gamma)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// FIX 3 — cross-field i0 >= n guard
+// Decoding ?n=10&i0=9999 must fall back both n and i0 to defaults
+// so initialState never computes a negative susceptible count.
+// ---------------------------------------------------------------------------
+
+describe("simulationCodec cross-field i0 >= n guard (FIX3)", () => {
+  it("?n=10&i0=9999 → both n and i0 fall back to defaults", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("n=10&i0=9999"))
+    expect(decoded.n).toBe(SIMULATION_CODEC_DEFAULTS.n)
+    expect(decoded.i0).toBe(SIMULATION_CODEC_DEFAULTS.i0)
+  })
+
+  it("?n=10&i0=9999 → n - i0 is non-negative (no negative susceptible)", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("n=10&i0=9999"))
+    expect(decoded.n - decoded.i0).toBeGreaterThanOrEqual(0)
+  })
+
+  it("?n=10&i0=10 (i0 === n) → both fall back to defaults", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("n=10&i0=10"))
+    expect(decoded.n).toBe(SIMULATION_CODEC_DEFAULTS.n)
+    expect(decoded.i0).toBe(SIMULATION_CODEC_DEFAULTS.i0)
+  })
+
+  it("?n=1000&i0=5 (valid) → decodes correctly without fallback", () => {
+    const decoded = simulationCodec.decode(new URLSearchParams("n=1000&i0=5"))
+    expect(decoded.n).toBe(1000)
+    expect(decoded.i0).toBe(5)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // SIM5.1 — encoded fields and URL keys
 // ---------------------------------------------------------------------------
 

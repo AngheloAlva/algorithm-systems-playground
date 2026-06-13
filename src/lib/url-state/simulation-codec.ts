@@ -39,12 +39,17 @@ export const SIMULATION_CODEC_DEFAULTS: SimulationUrlState = {
 }
 
 // ---------------------------------------------------------------------------
-// Validation helper
+// Validation helpers
 // ---------------------------------------------------------------------------
 
-/** Returns true if value is a finite positive number (> 0). */
+/** Returns true if value is a finite positive number (> 0). Used for beta and n. */
 function isValidPositive(value: number): boolean {
   return Number.isFinite(value) && value > 0
+}
+
+/** Returns true if value is a finite non-negative number (>= 0). Used for mu, gamma, i0. */
+function isValidNonNegative(value: number): boolean {
+  return Number.isFinite(value) && value >= 0
 }
 
 // ---------------------------------------------------------------------------
@@ -75,20 +80,42 @@ export const simulationCodec: StateCodec<SimulationUrlState> = {
   },
 
   decode(params: URLSearchParams): SimulationUrlState {
-    const betaRaw = Number(params.get("b"))
-    const beta = isValidPositive(betaRaw) ? betaRaw : SIMULATION_CODEC_DEFAULTS.beta
+    const betaStr = params.get("b")
+    const beta =
+      betaStr !== null && isValidPositive(Number(betaStr))
+        ? Number(betaStr)
+        : SIMULATION_CODEC_DEFAULTS.beta
 
-    const gammaRaw = Number(params.get("g"))
-    const gamma = isValidPositive(gammaRaw) ? gammaRaw : SIMULATION_CODEC_DEFAULTS.gamma
+    // gamma=0 is valid (reduces to SI model, SIM1.7-d): use isValidNonNegative
+    const gammaStr = params.get("g")
+    const gamma =
+      gammaStr !== null && isValidNonNegative(Number(gammaStr))
+        ? Number(gammaStr)
+        : SIMULATION_CODEC_DEFAULTS.gamma
 
-    const muRaw = Number(params.get("m"))
-    const mu = isValidPositive(muRaw) ? muRaw : SIMULATION_CODEC_DEFAULTS.mu
+    // mu=0 is valid (reduces to SIR model, SIM1.7-c): use isValidNonNegative
+    const muStr = params.get("m")
+    const mu =
+      muStr !== null && isValidNonNegative(Number(muStr))
+        ? Number(muStr)
+        : SIMULATION_CODEC_DEFAULTS.mu
 
-    const nRaw = Number(params.get("n"))
-    const n = isValidPositive(nRaw) ? nRaw : SIMULATION_CODEC_DEFAULTS.n
+    const nStr = params.get("n")
+    const n =
+      nStr !== null && isValidPositive(Number(nStr)) ? Number(nStr) : SIMULATION_CODEC_DEFAULTS.n
 
-    const i0Raw = Number(params.get("i0"))
-    const i0 = isValidPositive(i0Raw) ? i0Raw : SIMULATION_CODEC_DEFAULTS.i0
+    // i0=0 is valid (no initial infection, SIM1.7-a): use isValidNonNegative
+    const i0Str = params.get("i0")
+    const i0 =
+      i0Str !== null && isValidNonNegative(Number(i0Str))
+        ? Number(i0Str)
+        : SIMULATION_CODEC_DEFAULTS.i0
+
+    // Cross-field guard: i0 >= n would produce negative susceptible count.
+    // Fall back both to defaults for determinism (FIX3).
+    if (i0 >= n) {
+      return { beta, gamma, mu, n: SIMULATION_CODEC_DEFAULTS.n, i0: SIMULATION_CODEC_DEFAULTS.i0 }
+    }
 
     return { beta, gamma, mu, n, i0 }
   },

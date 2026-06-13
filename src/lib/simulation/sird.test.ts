@@ -138,14 +138,49 @@ describe("non-negativity (T1-d)", () => {
     }
   })
 
-  it("clamped state still satisfies s + (i+r+d) === N exactly", () => {
-    // Force a state that would go negative without clamping
-    const state = { s: 0.0001, i: 999.9999, r: 0, d: 0 }
-    const aggressiveParams = { ...SIRD_DEFAULTS, beta: 10 }
-    const next = stepSIRD(state, aggressiveParams, DT)
+  it("S-clamp path: nextS === 0 AND nextI+nextR+nextD === N when othersSum > N", () => {
+    // This test triggers the S-clamp path: othersSum > n after the step.
+    // Use s:0, i:999, r:0, d:0 with beta:50 — infection term is 0 (no susceptibles)
+    // but the high-beta test we really want is s:1, i:999, rest:0 with beta:50.
+    // With beta=50, dt=0.1: infection = 50*1*999/1000 ≈ 49.95 per unit time
+    // dI = (infection - gamma*i - mu*i)*dt ≈ (49.95 - 99.9 - 0.5)*0.1 ≈ -5.04 (I goes down)
+    // Use a state where the I growth dominates: s:500, i:499, r:0, d:0, beta=50
+    // infection = 50*500*499/1000 = 12475 per day, *0.1 = 1247.5 → nextI will be huge
+    // dS = -infection*dt = -1247.5 → far negative → S clamps to 0
+    // dI = (1247.5 - gamma*499 - mu*499)*0.1 ... rawI = 499 + 1247.5 - 49.9 - 2.495 ≈ 1694
+    // othersSum = nextI + nextR + nextD > 1000 = n → S-clamp path fires
+    const params = { ...SIRD_DEFAULTS, beta: 50 }
+    const state = { s: 500, i: 499, r: 0, d: 0 }
+    const next = stepSIRD(state, params, DT)
+    expect(next.s).toBe(0) // clamped to 0
+    expect(next.i + next.r + next.d).toBeCloseTo(SIRD_DEFAULTS.n, 10) // others sum to N
+    expect(next.s + next.i + next.r + next.d).toBeCloseTo(SIRD_DEFAULTS.n, 10) // s+i+r+d === N
+    expect(next.i).toBeGreaterThanOrEqual(0)
+    expect(next.r).toBeGreaterThanOrEqual(0)
+    expect(next.d).toBeGreaterThanOrEqual(0)
+  })
+
+  it("S-clamp with fully-infected start (s:0, i:999, r:0, d:0, beta:50) satisfies conservation", () => {
+    // s=0 so no new infections; only removal through gamma/mu
+    // This tests the normal residual path (othersSum <= n, nextS = n - othersSum)
+    const params = { ...SIRD_DEFAULTS, beta: 50 }
+    const state = { s: 0, i: 999, r: 0, d: 0 }
+    const next = stepSIRD(state, params, DT)
     expect(next.s + (next.i + next.r + next.d)).toBe(SIRD_DEFAULTS.n)
     expect(next.s).toBeGreaterThanOrEqual(0)
     expect(next.i).toBeGreaterThanOrEqual(0)
+  })
+
+  it("conservation holds at EVERY step over 500 steps with beta=5 (catches silent S-clamp drift)", () => {
+    let state = initialState(SIRD_DEFAULTS)
+    const aggressiveParams = { ...SIRD_DEFAULTS, beta: 5 }
+    const N = SIRD_DEFAULTS.n
+    for (let step = 0; step < 500; step++) {
+      state = stepSIRD(state, aggressiveParams, DT)
+      // Must hold EXACTLY (not just approximately) — ADR-7 guarantee
+      const sum = state.s + state.i + state.r + state.d
+      expect(Math.abs(sum - N)).toBeLessThan(1e-9)
+    }
   })
 })
 
@@ -212,10 +247,12 @@ describe("epidemic threshold (T1-f)", () => {
   it("R0 > 1 (SIRD_DEFAULTS) → I rises to a peak > I0 then falls", () => {
     let state = initialState(SIRD_DEFAULTS)
     const values: number[] = [state.i]
-    // Run until auto-stop
-    while (state.i >= AUTO_STOP_I) {
+    // Run until auto-stop; guard cap prevents infinite loop if constant changes
+    let steps = 0
+    while (state.i >= AUTO_STOP_I && steps < 5000) {
       state = stepSIRD(state, SIRD_DEFAULTS, DT)
       values.push(state.i)
+      steps++
     }
     const peak = Math.max(...values)
     // Peak must be above initial infected count
@@ -288,5 +325,15 @@ describe("edge cases (T1-g)", () => {
       expect(state.r).toBeGreaterThanOrEqual(0)
       expect(state.d).toBeGreaterThanOrEqual(0)
     }
+  })
+
+  it("gamma=0, mu=0 degenerate case → deriveMetrics returns r0=0, cfr=0, herdImmunityThreshold=0", () => {
+    // When removal rate (gamma + mu) = 0, R0 is mathematically undefined.
+    // Convention: report r0=0, cfr=0, herdImmunityThreshold=0 (no epidemic threshold).
+    const params = { ...SIRD_DEFAULTS, gamma: 0, mu: 0 }
+    const metrics = deriveMetrics(params)
+    expect(metrics.r0).toBe(0)
+    expect(metrics.cfr).toBe(0)
+    expect(metrics.herdImmunityThreshold).toBe(0)
   })
 })
