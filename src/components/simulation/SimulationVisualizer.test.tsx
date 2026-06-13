@@ -228,10 +228,10 @@ describe("SimulationVisualizer — URL sync on mount", () => {
     // This test exercises the handleParamChange → syncUrl path to verify the
     // stale-closure bug is fixed.
     //
-    // Bug BEFORE FIX 1: syncUrl closes over the stale `params` snapshot from
+    // Bug BEFORE FIX 2: syncUrl closes over the stale `params` snapshot from
     // the last render, so router.replace encodes the OLD value even though
     // setParam already updated the store.
-    // After FIX 1: syncUrl calls useSimulationStore.getState().params, reading
+    // After FIX 2: syncUrl calls useSimulationStore.getState().params, reading
     // the fresh store value, so router.replace encodes the NEW value.
     //
     // Strategy: set beta to a non-default value (0.3) so the component renders
@@ -274,14 +274,14 @@ describe("SimulationVisualizer — URL sync on mount", () => {
         await Promise.resolve()
       })
     } else {
-      // Fallback: directly invoke the same sequence handleParamChange performs —
-      // setParam + Promise.resolve().then(syncUrl). Because syncUrl is a closure
-      // captured in the component, we must trigger it via the store's setParam
-      // and then flush the microtask queue.
+      // Fallback: the fiber walk could not locate onValueChange (e.g. the fiber
+      // key changed between React versions). We call setParam directly, which
+      // updates the store but does NOT invoke syncUrl — the URL write will NOT
+      // happen through this path. This fallback will cause the router.replace
+      // assertion below to fail loudly, surfacing the broken primary path rather
+      // than silently passing with an inaccurate signal.
       await act(async () => {
         useSimulationStore.getState().setParam("beta", 0.5)
-        // Flush two microtask ticks (one for Promise.resolve inside handleParamChange,
-        // one for any additional scheduling)
         await Promise.resolve()
         await Promise.resolve()
       })
@@ -323,37 +323,51 @@ describe("SimulationVisualizer — slider a11y (FIX 4)", () => {
   it("each param slider is programmatically associated with its visible label via aria-labelledby", () => {
     const { container } = render(<SimulationVisualizer />)
 
-    // Each param slider group has a <label> with an id and a <Slider> with aria-labelledby
-    // pointing to that label's id. getByLabelText will find the slider root by label text.
-    // We check for each of the 5 param sliders by their label text.
-    const paramLabels = [
-      /β.*Transmission/i,
-      /γ.*Recovery/i,
-      /μ.*Mortality/i,
-      /Population/i,
-      /Initial infected/i,
-    ]
+    // Each param slider group renders:
+    //   <label id="sim-param-label-{key}">…label text…</label>
+    //   <Slider aria-labelledby="sim-param-label-{key}" />  (Slider root = div[role="group"])
+    //
+    // We verify the full association chain for each param: the label id exists in the DOM,
+    // the slider carries aria-labelledby pointing to it, and the label's text content
+    // matches the visible label string. This test FAILS if htmlFor self-reference is
+    // re-introduced or if aria-labelledby is removed or points to a missing element.
 
-    for (const labelPattern of paramLabels) {
-      // The label element should be in the DOM
-      const labelEl = container.querySelector(`label`)
-      expect(labelEl, `Expected a label element for ${labelPattern}`).toBeDefined()
+    const PARAM_KEYS = ["beta", "gamma", "mu", "n", "i0"] as const
+    const EXPECTED_LABEL_TEXT: Record<string, RegExp> = {
+      beta: /β.*Transmission/i,
+      gamma: /γ.*Recovery/i,
+      mu: /μ.*Mortality/i,
+      n: /Population/i,
+      i0: /Initial infected/i,
     }
 
-    // Each slider root with data-slot="slider" should have aria-labelledby pointing
-    // to a label element that exists in the document.
-    const sliderRoots = container.querySelectorAll("[data-slot='slider']")
-    // At least 5 param sliders
-    expect(sliderRoots.length).toBeGreaterThanOrEqual(5)
+    for (const key of PARAM_KEYS) {
+      const labelId = `sim-param-label-${key}`
 
-    // The first 5 sliders (param sliders) must have aria-labelledby
-    for (let i = 0; i < 5; i++) {
-      const slider = sliderRoots[i] as HTMLElement
-      const labelledBy = slider.getAttribute("aria-labelledby")
-      expect(labelledBy, `Slider[${i}] must have aria-labelledby`).toBeTruthy()
-      // The referenced label must exist in the DOM
-      const referencedLabel = container.querySelector(`#${labelledBy}`)
-      expect(referencedLabel, `Slider[${i}] aria-labelledby="${labelledBy}" references missing element`).toBeDefined()
+      // 1. Label element with the expected id must exist
+      const labelEl = container.querySelector<HTMLElement>(`#${labelId}`)
+      expect(labelEl, `Expected <label id="${labelId}"> for param "${key}"`).toBeTruthy()
+
+      // 2. Label text must match the visible label string
+      expect(
+        labelEl?.textContent,
+        `Label "${labelId}" text should match ${EXPECTED_LABEL_TEXT[key]}`
+      ).toMatch(EXPECTED_LABEL_TEXT[key])
+
+      // 3. A slider root with aria-labelledby pointing to this label must exist
+      const slider = container.querySelector<HTMLElement>(
+        `[data-slot='slider'][aria-labelledby='${labelId}']`
+      )
+      expect(
+        slider,
+        `Expected <Slider aria-labelledby="${labelId}"> for param "${key}" — association broken`
+      ).toBeTruthy()
+
+      // 4. The label must NOT have htmlFor (self-referencing htmlFor on a div[role="group"] is invalid)
+      expect(
+        labelEl?.getAttribute("for"),
+        `Label "${labelId}" must not carry htmlFor — Slider root is a div, not a labelable control`
+      ).toBeNull()
     }
   })
 })

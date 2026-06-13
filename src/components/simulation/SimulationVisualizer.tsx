@@ -51,7 +51,6 @@ import { PlayIcon, PauseIcon, RotateCcwIcon } from "lucide-react"
 interface ParamSliderConfig {
   key: keyof typeof SIRD_DEFAULTS
   label: string
-  ariaLabel: string
   min: number
   max: number
   step: number
@@ -61,7 +60,6 @@ const PARAM_SLIDERS: ParamSliderConfig[] = [
   {
     key: "beta",
     label: "β (Transmission)",
-    ariaLabel: "beta — transmission rate",
     min: 0.01,
     max: 1.0,
     step: 0.01,
@@ -69,7 +67,6 @@ const PARAM_SLIDERS: ParamSliderConfig[] = [
   {
     key: "gamma",
     label: "γ (Recovery)",
-    ariaLabel: "gamma — recovery rate",
     min: 0.0,
     max: 0.5,
     step: 0.01,
@@ -77,7 +74,6 @@ const PARAM_SLIDERS: ParamSliderConfig[] = [
   {
     key: "mu",
     label: "μ (Mortality)",
-    ariaLabel: "mu — mortality rate",
     min: 0.0,
     max: 0.1,
     step: 0.001,
@@ -85,7 +81,6 @@ const PARAM_SLIDERS: ParamSliderConfig[] = [
   {
     key: "n",
     label: "Population (N)",
-    ariaLabel: "n — total population",
     min: 100,
     max: 10000,
     step: 100,
@@ -93,7 +88,6 @@ const PARAM_SLIDERS: ParamSliderConfig[] = [
   {
     key: "i0",
     label: "Initial infected (I₀)",
-    ariaLabel: "i0 — initial infected",
     min: 1,
     max: 100,
     step: 1,
@@ -276,13 +270,12 @@ export function SimulationVisualizer() {
           {/* Param sliders — SIM7.4 */}
           <ControlPanel title="Parameters">
             <div className="flex flex-col gap-3">
-              {PARAM_SLIDERS.map(({ key, label, ariaLabel, min, max, step }) => {
+              {PARAM_SLIDERS.map(({ key, label, min, max, step }) => {
                 const labelId = `sim-param-label-${key}`
                 return (
                   <div key={key} className="flex flex-col gap-1">
                     <label
                       id={labelId}
-                      htmlFor={labelId}
                       className="text-muted-foreground text-xs flex justify-between"
                     >
                       <span>{label}</span>
@@ -299,7 +292,6 @@ export function SimulationVisualizer() {
                         const v = Array.isArray(vals) ? vals[0] : vals
                         handleParamChange(key, v as number)
                       }}
-                      aria-label={ariaLabel}
                       aria-labelledby={labelId}
                       className="w-full"
                     />
