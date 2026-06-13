@@ -156,17 +156,23 @@ export function SimulationVisualizer() {
   }, [])
 
   const syncUrl = useCallback(() => {
+    // Read params from the store directly so we always get the latest values,
+    // not a stale closure snapshot. This mirrors the mount-decode path which
+    // also uses getState() (see urlSyncedRef effect above).
+    // The store is updated synchronously by setParam before the microtask fires,
+    // so getState().params always returns the current values here.
+    const liveParams = useSimulationStore.getState().params
     const urlState = {
-      beta: params.beta,
-      gamma: params.gamma,
-      mu: params.mu,
-      n: params.n,
-      i0: params.i0,
+      beta: liveParams.beta,
+      gamma: liveParams.gamma,
+      mu: liveParams.mu,
+      n: liveParams.n,
+      i0: liveParams.i0,
     }
     const urlParams = simulationCodec.encode(urlState)
     const qs = urlParams.toString()
     router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false })
-  }, [params, router])
+  }, [router])
 
   // -------------------------------------------------------------------------
   // Derived
@@ -270,28 +276,36 @@ export function SimulationVisualizer() {
           {/* Param sliders — SIM7.4 */}
           <ControlPanel title="Parameters">
             <div className="flex flex-col gap-3">
-              {PARAM_SLIDERS.map(({ key, label, ariaLabel, min, max, step }) => (
-                <div key={key} className="flex flex-col gap-1">
-                  <label className="text-muted-foreground text-xs flex justify-between">
-                    <span>{label}</span>
-                    <span className="font-medium tabular-nums text-foreground">
-                      {params[key]}
-                    </span>
-                  </label>
-                  <Slider
-                    min={min}
-                    max={max}
-                    step={step}
-                    value={[params[key] as number]}
-                    onValueChange={(vals) => {
-                      const v = Array.isArray(vals) ? vals[0] : vals
-                      handleParamChange(key, v as number)
-                    }}
-                    aria-label={ariaLabel}
-                    className="w-full"
-                  />
-                </div>
-              ))}
+              {PARAM_SLIDERS.map(({ key, label, ariaLabel, min, max, step }) => {
+                const labelId = `sim-param-label-${key}`
+                return (
+                  <div key={key} className="flex flex-col gap-1">
+                    <label
+                      id={labelId}
+                      htmlFor={labelId}
+                      className="text-muted-foreground text-xs flex justify-between"
+                    >
+                      <span>{label}</span>
+                      <span className="font-medium tabular-nums text-foreground">
+                        {params[key]}
+                      </span>
+                    </label>
+                    <Slider
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={[params[key] as number]}
+                      onValueChange={(vals) => {
+                        const v = Array.isArray(vals) ? vals[0] : vals
+                        handleParamChange(key, v as number)
+                      }}
+                      aria-label={ariaLabel}
+                      aria-labelledby={labelId}
+                      className="w-full"
+                    />
+                  </div>
+                )
+              })}
             </div>
           </ControlPanel>
 

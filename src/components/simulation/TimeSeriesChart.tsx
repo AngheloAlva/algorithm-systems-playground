@@ -20,6 +20,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ReferenceLine,
   ResponsiveContainer,
 } from "recharts"
@@ -70,6 +71,8 @@ export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
             String(name).toUpperCase(),
           ]}
         />
+        {/* Legend — persistent text labels for S/I/R/D series (WCAG 1.4.1 non-color differentiation) */}
+        <Legend verticalAlign="top" height={24} iconSize={10} wrapperStyle={{ fontSize: 11 }} />
 
         {/* Four compartment series */}
         <Line

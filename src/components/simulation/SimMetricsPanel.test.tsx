@@ -45,10 +45,9 @@ describe("SimMetricsPanel", () => {
   it("shows '—' placeholder for all metrics when status is IDLE", () => {
     render(<SimMetricsPanel metrics={SAMPLE_METRICS} status={IDLE_STATUS} />)
     const dashes = screen.getAllByText("—")
-    // At least 4 "—" (the run-dependent metrics: peak, deaths, duration; R0/CFR/herd visible always)
-    // Design note: R0/CFR/herd are param-derived (valid anytime); the component may
-    // choose to show them or "—" during IDLE. We assert at least the run-specific ones are "—".
-    expect(dashes.length).toBeGreaterThanOrEqual(1)
+    // All 7 metric values are "—" when IDLE: R0, CFR, herd immunity,
+    // peak infected, peak day, total deaths, duration (FIX 5).
+    expect(dashes.length).toBeGreaterThanOrEqual(7)
   })
 
   it("renders the panel without crashing when status is IDLE", () => {

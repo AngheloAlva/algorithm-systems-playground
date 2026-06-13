@@ -49,6 +49,8 @@ vi.mock("recharts", () => {
     )
   }
 
+  const Legend = () => <div data-testid="legend" />
+
   return {
     ResponsiveContainer,
     LineChart,
@@ -58,6 +60,7 @@ vi.mock("recharts", () => {
     CartesianGrid,
     Tooltip,
     ReferenceLine,
+    Legend,
   }
 })
 
@@ -137,10 +140,15 @@ describe("TimeSeriesChart", () => {
     expect(screen.getByTestId("reference-line-label").textContent).toMatch(/herd immunity/i)
   })
 
-  it("does NOT render ReferenceLine when herdLine is 0 (falsy but valid edge)", () => {
+  it("renders ReferenceLine when herdLine is 0 (finite boundary)", () => {
     // herdLine=0 is a finite number; the component SHOULD render the line.
     // This documents the current behavior — 0 is a valid y threshold.
     render(<TimeSeriesChart ticks={SAMPLE_TICKS} herdLine={0} />)
     expect(screen.getByTestId("reference-line")).toBeDefined()
+  })
+
+  it("renders a Legend for S/I/R/D series (FIX 3 — WCAG 1.4.1 non-color differentiation)", () => {
+    render(<TimeSeriesChart ticks={SAMPLE_TICKS} />)
+    expect(screen.getByTestId("legend")).toBeDefined()
   })
 })

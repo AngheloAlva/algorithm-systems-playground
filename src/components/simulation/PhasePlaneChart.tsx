@@ -40,7 +40,7 @@ interface PhasePlaneChartProps {
 
 export function PhasePlaneChart({ ticks }: PhasePlaneChartProps) {
   // Derive parametric data: x = susceptible, y = infected, in time order.
-  // React 19 compiler auto-memoizes this on ticks identity; no manual useMemo.
+  // Derived inline; cheap at ≤160 points — no manual useMemo needed.
   const data = ticks.map((p) => ({ x: p.s, y: p.i }))
 
   return (
@@ -63,7 +63,9 @@ export function PhasePlaneChart({ ticks }: PhasePlaneChartProps) {
           contentStyle={{ fontSize: 12 }}
           formatter={(value, name) => [
             typeof value === "number" ? value.toFixed(1) : String(value),
-            name === "y" ? "Infected" : "Susceptible",
+            // Recharts passes the Line's `name` prop ("I"), not the dataKey ("y").
+            // Single series — always "Infected".
+            name === "I" ? "Infected" : "Susceptible",
           ]}
         />
         <Line
