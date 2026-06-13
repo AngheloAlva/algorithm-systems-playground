@@ -118,12 +118,9 @@ describe("conservation invariant (T1-c)", () => {
 // ---------------------------------------------------------------------------
 
 describe("non-negativity (T1-d)", () => {
-  it("s >= 0 with large beta that would drive s negative", () => {
-    const start = initialState(SIRD_DEFAULTS)
+  it("s >= 0 with large beta and very small susceptible pool", () => {
     const aggressiveParams = { ...SIRD_DEFAULTS, beta: 10 }
-    // s=999, i=1, large beta=10, one step of dt=0.1:
-    // raw dS = -10 * 999 * 1/1000 * 0.1 = -0.999  → s would be 998.001 (still positive)
-    // Use a state with very small s
+    // Construct a state with very small s to force the residual path
     const state = { s: 0.0001, i: 500, r: 249.9999, d: 250 }
     const next = stepSIRD(state, aggressiveParams, DT)
     expect(next.s).toBeGreaterThanOrEqual(0)

@@ -165,7 +165,6 @@ export function stepSIRD(state: SIRState, params: SIRParams, dt: number): SIRSta
   const recovery = gamma * i
   const death = mu * i
 
-  const rawS = s - infection * dt
   const rawI = i + (infection - recovery - death) * dt
   const rawR = r + recovery * dt
   const rawD = d + death * dt
