@@ -35,6 +35,10 @@ import {
 } from "@/store/dashboard-store"
 import type { SnapshotResult } from "@/lib/benchmark/snapshot"
 import type { SweepResult } from "@/lib/benchmark/sweep"
+import {
+  MIN_ARRAY_LENGTH,
+  MAX_ARRAY_LENGTH,
+} from "@/lib/algorithms/sorting/array-gen"
 import { dashboardCodec } from "@/lib/url-state/dashboard-codec"
 
 import { SnapshotChart } from "./SnapshotChart"
@@ -103,9 +107,10 @@ export function DashboardVisualizer() {
     const current = useDashboardStore.getState()
 
     // Clamp arrayLength to valid range (codec already validates, but guard for safety)
-    const MIN = 5
-    const MAX = 200
-    const clampedLen = Math.max(MIN, Math.min(MAX, decoded.arrayLength))
+    const clampedLen = Math.max(
+      MIN_ARRAY_LENGTH,
+      Math.min(MAX_ARRAY_LENGTH, decoded.arrayLength),
+    )
 
     const lenChanged = clampedLen !== current.arrayLength
     const modeChanged = decoded.arrayMode !== current.arrayMode

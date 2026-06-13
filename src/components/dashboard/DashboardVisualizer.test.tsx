@@ -174,6 +174,8 @@ describe("DashboardVisualizer — URL sync", () => {
 
     const state = useDashboardStore.getState()
     expect(state.seed).toBe(7)
+    // recompute ran with the hydrated seed → results populated (not just state set)
+    expect(state.snapshot).not.toBeNull()
 
     mockSearchParams.get = (): string | null => null
   })
