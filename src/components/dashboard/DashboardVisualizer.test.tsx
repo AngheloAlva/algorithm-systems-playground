@@ -23,6 +23,7 @@ const mockSearchParams: { get: (key: string) => string | null; toString: () => s
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace }),
   useSearchParams: () => mockSearchParams,
+  usePathname: () => "/dashboard",
 }))
 
 // ---------------------------------------------------------------------------
@@ -139,7 +140,7 @@ describe("DashboardVisualizer — mount", () => {
 })
 
 describe("DashboardVisualizer — URL sync", () => {
-  it("reads searchParams on mount", () => {
+  it("reads searchParams on mount and hydrates arrayLength", () => {
     // Override mock to return a non-default length
     mockSearchParams.get = (key: string): string | null =>
       key === "len" ? "100" : null
@@ -150,6 +151,52 @@ describe("DashboardVisualizer — URL sync", () => {
     expect(state.arrayLength).toBe(100)
 
     // Reset mock
+    mockSearchParams.get = (): string | null => null
+  })
+
+  it("hydrates arrayMode from ?mode=reversed", () => {
+    mockSearchParams.get = (key: string): string | null =>
+      key === "mode" ? "reversed" : null
+
+    render(<DashboardVisualizer />)
+
+    const state = useDashboardStore.getState()
+    expect(state.arrayMode).toBe("reversed")
+
+    mockSearchParams.get = (): string | null => null
+  })
+
+  it("hydrates seed from ?seed=7", () => {
+    mockSearchParams.get = (key: string): string | null =>
+      key === "seed" ? "7" : null
+
+    render(<DashboardVisualizer />)
+
+    const state = useDashboardStore.getState()
+    expect(state.seed).toBe(7)
+
+    mockSearchParams.get = (): string | null => null
+  })
+
+  it("batches all three params and triggers exactly one recompute (no triple-recompute)", () => {
+    const recomputeSpy = vi.fn()
+    useDashboardStore.setState({ recompute: recomputeSpy })
+
+    mockSearchParams.get = (key: string): string | null => {
+      if (key === "len") return "120"
+      if (key === "mode") return "reversed"
+      if (key === "seed") return "7"
+      return null
+    }
+
+    render(<DashboardVisualizer />)
+
+    expect(recomputeSpy).toHaveBeenCalledTimes(1)
+    const state = useDashboardStore.getState()
+    expect(state.arrayLength).toBe(120)
+    expect(state.arrayMode).toBe("reversed")
+    expect(state.seed).toBe(7)
+
     mockSearchParams.get = (): string | null => null
   })
 })

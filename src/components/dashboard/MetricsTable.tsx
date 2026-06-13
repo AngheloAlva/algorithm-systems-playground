@@ -65,7 +65,7 @@ export function MetricsTable({ rows }: MetricsTableProps) {
                       <span>
                         {row.swaps}
                         <span
-                          data-testid="merge-swaps-note"
+                          data-testid="table-merge-swaps-note"
                           title="Merge Sort places elements rather than swapping — swap count is 0 by design."
                           className="ml-1 cursor-help text-muted-foreground sr-only"
                           aria-label="Merge Sort places elements, not swaps — 0 by design"

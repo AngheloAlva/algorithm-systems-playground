@@ -54,6 +54,7 @@ interface SweepChartProps {
 export function SweepChart({ data }: SweepChartProps) {
   return (
     <div
+      role="img"
       aria-label="Sweep benchmark line chart showing comparisons growth across array sizes"
     >
       <ResponsiveContainer width="100%" height={300}>

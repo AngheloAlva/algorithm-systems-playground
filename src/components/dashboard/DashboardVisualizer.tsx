@@ -25,8 +25,8 @@
  * Design: ADR-C (single scrolling page), ADR-F (RSC boundary)
  */
 
-import { useEffect, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useCallback, useEffect, useRef } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 
 import {
   useDashboardStore,
@@ -74,6 +74,7 @@ function mapSweepToChartRows(sweep: SweepResult): SweepChartRow[] {
 export function DashboardVisualizer() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname()
 
   // -------------------------------------------------------------------------
   // Store subscriptions — subscribe to stable state fields, not derived arrays
@@ -81,9 +82,6 @@ export function DashboardVisualizer() {
 
   const snapshot = useDashboardStore((s) => s.snapshot)
   const sweep = useDashboardStore((s) => s.sweep)
-  const setArrayLength = useDashboardStore((s) => s.setArrayLength)
-  const setArrayMode = useDashboardStore((s) => s.setArrayMode)
-  const recompute = useDashboardStore((s) => s.recompute)
 
   // Derive chart data from stable snapshot/sweep references (inline, not via selector)
   const barChartData: BarChartRow[] = snapshot ? mapSnapshotToBarChartRows(snapshot) : []
@@ -91,6 +89,8 @@ export function DashboardVisualizer() {
 
   // -------------------------------------------------------------------------
   // URL sync — read once on mount (mirrors GraphVisualizer / SimulationVisualizer)
+  // Batch all three fields into a single setState + one recompute() call to
+  // avoid the triple-recompute bug (FIX-2): individual setters each call recompute().
   // -------------------------------------------------------------------------
 
   const urlSyncedRef = useRef(false)
@@ -102,35 +102,41 @@ export function DashboardVisualizer() {
     const decoded = dashboardCodec.decode(searchParams)
     const current = useDashboardStore.getState()
 
-    // Apply URL params that differ from current store state.
-    // setArrayLength / setArrayMode each call recompute() internally.
-    // If no config differs, call recompute() directly for initial data load.
-    let configChanged = false
-    if (decoded.arrayLength !== current.arrayLength) {
-      setArrayLength(decoded.arrayLength)
-      configChanged = true
+    // Clamp arrayLength to valid range (codec already validates, but guard for safety)
+    const MIN = 5
+    const MAX = 200
+    const clampedLen = Math.max(MIN, Math.min(MAX, decoded.arrayLength))
+
+    const lenChanged = clampedLen !== current.arrayLength
+    const modeChanged = decoded.arrayMode !== current.arrayMode
+    const seedChanged = decoded.seed !== current.seed
+
+    if (lenChanged || modeChanged || seedChanged) {
+      // Batch all fields in one setState — no recompute triggered per setter
+      useDashboardStore.setState({
+        arrayLength: clampedLen,
+        arrayMode: decoded.arrayMode,
+        seed: decoded.seed,
+      })
     }
-    if (decoded.arrayMode !== current.arrayMode) {
-      setArrayMode(decoded.arrayMode)
-      configChanged = true
-    }
-    if (!configChanged) {
-      recompute()
-    }
+    // Always run recompute exactly once for initial data load
+    useDashboardStore.getState().recompute()
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // -------------------------------------------------------------------------
   // URL write — called after any config change by BenchmarkControls
+  // Uses usePathname() hook (FIX-5) instead of window.location.pathname.
   // -------------------------------------------------------------------------
 
-  function syncUrl() {
+  const syncUrl = useCallback(() => {
     const { arrayLength, arrayMode, seed } = useDashboardStore.getState()
     const urlState = { arrayLength, arrayMode, seed }
     const urlParams = dashboardCodec.encode(urlState)
     const qs = urlParams.toString()
-    router.replace(qs ? `?${qs}` : window.location.pathname, { scroll: false })
-  }
+    router.replace(qs ? `?${qs}` : pathname, { scroll: false })
+  }, [router, pathname])
 
   // -------------------------------------------------------------------------
   // Render

@@ -63,13 +63,15 @@ describe("MODULES registry", () => {
     expect(pathfinding?.status).toBe(MODULE_STATUS.AVAILABLE);
   });
 
-  it("graphs and pathfinding modules are available", () => {
+  it("pathfinding, graphs, simulation, and dashboard modules are available", () => {
     const available = MODULES.filter(
       (m) => m.status === MODULE_STATUS.AVAILABLE
     );
     const availableSlugs = available.map((m) => m.slug)
     expect(availableSlugs).toContain("pathfinding");
     expect(availableSlugs).toContain("graphs");
+    expect(availableSlugs).toContain("simulation");
+    expect(availableSlugs).toContain("dashboard");
   });
 
   it("all 4 modules are available (dashboard activated in Slice C)", () => {

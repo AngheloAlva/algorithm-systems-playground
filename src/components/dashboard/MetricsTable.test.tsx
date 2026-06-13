@@ -74,13 +74,13 @@ describe("MetricsTable", () => {
   it("Merge Sort swaps cell contains a note marker (UI-3)", () => {
     render(<MetricsTable rows={SAMPLE_ROWS} />)
     // Must have a note marker indicating Merge Sort uses PLACE not SWAP
-    const mergeNote = screen.getByTestId("merge-swaps-note")
+    const mergeNote = screen.getByTestId("table-merge-swaps-note")
     expect(mergeNote).toBeDefined()
   })
 
   it("renders merge swaps note explaining zero-swap behavior", () => {
     render(<MetricsTable rows={SAMPLE_ROWS} />)
-    const note = screen.getByTestId("merge-swaps-note")
+    const note = screen.getByTestId("table-merge-swaps-note")
     // Note must convey information about merge sorting placing elements
     expect(note.textContent).toMatch(/place|merge|0/i)
   })

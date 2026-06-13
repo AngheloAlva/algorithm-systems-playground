@@ -49,6 +49,7 @@ interface SnapshotChartProps {
 export function SnapshotChart({ rows }: SnapshotChartProps) {
   return (
     <div
+      role="img"
       className="flex flex-col gap-2"
       aria-label="Snapshot benchmark bar chart comparing algorithm comparisons and swaps"
     >
@@ -91,7 +92,7 @@ export function SnapshotChart({ rows }: SnapshotChartProps) {
 
       {/* Merge Sort swaps=0 note — spec UI-1, design ADR-D */}
       <p
-        data-testid="merge-swaps-note"
+        data-testid="snapshot-merge-swaps-note"
         className="text-muted-foreground text-xs"
       >
         * Merge Sort places elements rather than swapping, so its swap count is

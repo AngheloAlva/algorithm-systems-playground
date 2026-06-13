@@ -101,4 +101,27 @@ describe("BenchmarkControls", () => {
     fireEvent.click(screen.getByRole("button", { name: /regenerate/i }))
     expect(regenerateSpy).toHaveBeenCalledTimes(1)
   })
+
+  it("slider onValueChange wires through to store arrayLength (UI-4, spec)", () => {
+    // Spy on setArrayLength to assert the control→store chain
+    const setArrayLengthSpy = vi.fn()
+    useDashboardStore.setState({ setArrayLength: setArrayLengthSpy })
+
+    const { container } = render(<BenchmarkControls />)
+
+    // Trigger the slider's onValueChange with value 120
+    // The Radix Slider fires onValueChange with a number[] array
+    const sliderRoot = container.querySelector("[data-slot='slider']")
+    expect(sliderRoot).toBeTruthy()
+
+    // Fire the change event at the internal input (Radix exposes a hidden input)
+    const input = container.querySelector("input[type='range']")
+    if (input) {
+      fireEvent.change(input, { target: { value: "120" } })
+    }
+
+    // Verify store is updated via setArrayLength
+    expect(setArrayLengthSpy).toHaveBeenCalledWith(120)
+    expect(useDashboardStore.getState().arrayLength).not.toBe(120) // spy replaced real fn
+  })
 })

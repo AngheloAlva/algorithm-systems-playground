@@ -113,7 +113,7 @@ describe("SnapshotChart", () => {
   it("renders the Merge Sort swaps=0 note — UI-1 (Merge uses PLACE not SWAP)", () => {
     render(<SnapshotChart rows={SAMPLE_ROWS} />)
     // Must include a note conveying that Merge Sort places elements, not swaps
-    const note = screen.getByTestId("merge-swaps-note")
+    const note = screen.getByTestId("snapshot-merge-swaps-note")
     expect(note).toBeDefined()
     expect(note.textContent).toMatch(/merge|place/i)
   })
