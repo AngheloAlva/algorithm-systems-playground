@@ -6,7 +6,7 @@
  * Authority:
  *   - dt = 0.1 (design ADR-1; spec's SIM1.2-a fixture uses dt=1, NOT used here)
  *   - SIRD_DEFAULTS: beta=0.3, gamma=0.1, mu=0.005, n=1000, i0=1 (ADR-3)
- *   - Clamp + renormalize: s+i+r+d === N EXACTLY (strict ===, ADR-7)
+ *   - Clamp + renormalize: normal path gives s+(i+r+d) === N bit-exactly; S-clamp within ~1e-12 (ADR-7)
  */
 
 import { describe, it, expect } from "vitest"
@@ -160,9 +160,9 @@ describe("non-negativity (T1-d)", () => {
     expect(next.d).toBeGreaterThanOrEqual(0)
   })
 
-  it("S-clamp with fully-infected start (s:0, i:999, r:0, d:0, beta:50) satisfies conservation", () => {
-    // s=0 so no new infections; only removal through gamma/mu
-    // This tests the normal residual path (othersSum <= n, nextS = n - othersSum)
+  it("normal residual path (s:0, i:999, r:0, d:0, beta:50): s+(i+r+d) === N bit-exactly", () => {
+    // s=0 means no new infections; othersSum <= n so the normal residual path fires:
+    // nextS = n - othersSum. IEEE 754: (n - x) + x === n exactly for the same x.
     const params = { ...SIRD_DEFAULTS, beta: 50 }
     const state = { s: 0, i: 999, r: 0, d: 0 }
     const next = stepSIRD(state, params, DT)
@@ -177,7 +177,8 @@ describe("non-negativity (T1-d)", () => {
     const N = SIRD_DEFAULTS.n
     for (let step = 0; step < 500; step++) {
       state = stepSIRD(state, aggressiveParams, DT)
-      // Must hold EXACTLY (not just approximately) — ADR-7 guarantee
+      // Within 1e-9 of N; S-clamp path (if triggered) is not bit-exact, so we
+      // use an approximate bound here rather than strict ===.
       const sum = state.s + state.i + state.r + state.d
       expect(Math.abs(sum - N)).toBeLessThan(1e-9)
     }
@@ -262,6 +263,34 @@ describe("epidemic threshold (T1-f)", () => {
     expect(peakIdx).toBeGreaterThan(0)
     // And I must have come back down
     expect(values[values.length - 1]).toBeLessThan(peak)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T1-h — n <= 0 guard (FIX B)
+// ---------------------------------------------------------------------------
+
+describe("n <= 0 guard (T1-h)", () => {
+  it("n=0 → returns input state unchanged (no NaN, no mutation)", () => {
+    const state = { s: 999, i: 1, r: 0, d: 0 }
+    const result = stepSIRD(state, { ...SIRD_DEFAULTS, n: 0 }, DT)
+    expect(result.s).toBe(state.s)
+    expect(result.i).toBe(state.i)
+    expect(result.r).toBe(state.r)
+    expect(result.d).toBe(state.d)
+    expect(Number.isNaN(result.s)).toBe(false)
+    expect(Number.isNaN(result.i)).toBe(false)
+    expect(Number.isNaN(result.r)).toBe(false)
+    expect(Number.isNaN(result.d)).toBe(false)
+  })
+
+  it("n=-5 → returns input state unchanged", () => {
+    const state = { s: 500, i: 300, r: 150, d: 50 }
+    const result = stepSIRD(state, { ...SIRD_DEFAULTS, n: -5 }, DT)
+    expect(result.s).toBe(state.s)
+    expect(result.i).toBe(state.i)
+    expect(result.r).toBe(state.r)
+    expect(result.d).toBe(state.d)
   })
 })
 

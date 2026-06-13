@@ -4,7 +4,7 @@
  * Design authority (design wins over spec):
  *   - dt = 0.1 day (ADR-1)
  *   - SIRD_DEFAULTS: β=0.3, γ=0.1, μ=0.005, N=1000, I₀=1 (ADR-3)
- *   - Clamp + renormalize: s+i+r+d === N EXACTLY, residual → s (ADR-7)
+ *   - Clamp + renormalize: normal path gives s+(i+r+d) === N bit-exactly; S-clamp path within ~1e-12 (ADR-7)
  *   - recharts@3.8.1 verified React 19 compat (T0 spike, 2026-06-13)
  *
  * Zero React imports. Zero module-load side effects. Pure TypeScript only.
@@ -148,24 +148,31 @@ export function computeSirdMetrics(
  * Advance the SIRD model by one timestep using forward Euler.
  *
  * After computing raw Euler increments, compartments are clamped to ≥ 0 and
- * the state is renormalized so s+i+r+d === N EXACTLY via one of two paths:
+ * the state is renormalized so s+i+r+d ≈ N via one of two paths:
  *
  * **Normal path** (othersSum ≤ N):
  *   S is set to the exact residual N − (I+R+D). IEEE 754 guarantees
- *   (N−x)+x === N for the same floating-point x, so the invariant is exact.
+ *   (N−x)+x === N for the same floating-point x, so `s + (i+r+d) === N`
+ *   is bit-exact when tested in that grouped form.
  *
  * **S-clamp path** (othersSum > N, triggered by aggressive params):
- *   I/R/D are renormalized proportionally so they sum to N, then S = 0.
- *   This restores the exact invariant even when the Euler step overshoots N.
+ *   S is set to 0; I/R/D are scaled by `n/othersSum` so they sum to N.
+ *   Because proportional scaling is not exact in IEEE 754, `s+i+r+d` is
+ *   within ~1e-12 of N but is NOT guaranteed to be bit-exact.
  *
- * Both paths guarantee: s+i+r+d === N exactly AND all compartments ≥ 0.
+ * Summary: normal path gives s+(i+r+d) === N bit-exactly; S-clamp path
+ * gives |s+i+r+d − N| < ~1e-12. All compartments are ≥ 0 on both paths.
  *
  * @param state  - Current compartment counts
- * @param params - Epidemic parameters
+ * @param params - Epidemic parameters; `n` must be > 0. If `n ≤ 0` the
+ *                 input state is returned unchanged (degenerate no-op).
  * @param dt     - Timestep in sim-days (pass DT constant)
  * @returns      - Next compartment state
  */
 export function stepSIRD(state: SIRState, params: SIRParams, dt: number): SIRState {
+  // Degenerate guard: n=0 would produce division by zero (NaN/Infinity).
+  if (params.n <= 0) return state
+
   const { beta, gamma, mu, n } = params
   const { s, i, r, d } = state
 
@@ -186,8 +193,8 @@ export function stepSIRD(state: SIRState, params: SIRParams, dt: number): SIRSta
   const othersSum = nextI + nextR + nextD
 
   if (othersSum > n) {
-    // S-clamp path: I/R/D overshoot N — renormalize proportionally so they
-    // sum to N exactly, then set S = 0. Preserves relative I:R:D ratios.
+    // S-clamp path: I/R/D overshoot N — renormalize proportionally, then set
+    // S = 0. Sum is within ~1e-12 of N (not bit-exact). Preserves I:R:D ratios.
     const scale = n / othersSum
     nextI *= scale
     nextR *= scale
