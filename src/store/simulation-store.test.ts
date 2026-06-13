@@ -62,6 +62,9 @@ describe("getInitialState", () => {
       totalDeaths: 0,
       durationDays: 0,
     })
+    // FIX C: _peakInfected and _peakDay must be present in the initial data shape
+    expect(s._peakInfected).toBe(SIRD_DEFAULTS.i0)
+    expect(s._peakDay).toBe(0)
   })
 
   it("initial current state matches initialState(SIRD_DEFAULTS)", () => {
@@ -358,26 +361,24 @@ describe("metrics ref stability (SIM8.1)", () => {
   beforeEach(resetStore)
 
   it("metrics ref is stable across 9 consecutive non-append steps", () => {
-    useSimulationStore.getState().play()
-    // Run 9 steps (< RECORD_INTERVAL) — no tick append, no DONE
-    runSteps(STEPS_PER_INTERVAL - 1)
-    const refA = useSimulationStore.getState().metrics
-    // One more step (total 9) — still no append, ref must stay the same
-    // We already ran 9 above; take a fresh ref mid-run before checking stability
-    // Restart from known state to keep it clean
-    resetStore()
+    // Steps 1–9 are all within the first RECORD_INTERVAL (which triggers at step 10).
+    // The metrics object reference must be IDENTICAL across all 9 steps — no churn.
     useSimulationStore.getState().play()
     runSteps(1)
     const refAfterStep1 = useSimulationStore.getState().metrics
-    runSteps(1)
-    const refAfterStep2 = useSimulationStore.getState().metrics
-    runSteps(1)
-    const refAfterStep3 = useSimulationStore.getState().metrics
-    // Steps 1-9 are all within the first RECORD_INTERVAL — ref must not change
-    expect(refAfterStep2).toBe(refAfterStep1)
-    expect(refAfterStep3).toBe(refAfterStep1)
-    // Silence unused variable warning
-    void refA
+
+    // Capture ref after each of steps 2–9 and assert identity with step-1 ref.
+    const refs: object[] = []
+    for (let step = 2; step <= STEPS_PER_INTERVAL - 1; step++) {
+      useSimulationStore.getState().step()
+      refs.push(useSimulationStore.getState().metrics)
+    }
+
+    for (const ref of refs) {
+      expect(ref).toBe(refAfterStep1)
+    }
+    // Confirm we ran exactly 9 steps total (STEPS_PER_INTERVAL - 1 = 9)
+    expect(refs).toHaveLength(STEPS_PER_INTERVAL - 2)
   })
 
   it("metrics ref CHANGES on the tick-append step (step 10)", () => {
@@ -411,19 +412,52 @@ describe("metrics ref stability (SIM8.1)", () => {
     expect(s.metrics.durationDays).toBeGreaterThan(0)
   })
 
-  it("peakInfected tracked every step even between append boundaries", () => {
-    // Run exactly 2 intervals (20 steps) from default params and verify
-    // that peakInfected in metrics reflects the actual max I seen so far
-    useSimulationStore.getState().play()
+  it("peakInfected reflects the true max I between append boundaries, not the I value at the boundary", () => {
+    // Inject a state where I is still rising and will peak around step 13-15
+    // (strictly between the append at step 10 and the append at step 20).
+    // After 20 steps, metrics.peakInfected must reflect the true maximum I
+    // seen during continuous per-step tracking — NOT the I value at step 20.
+    //
+    // Params: beta=0.8, gamma=0.3, mu=0.02, n=1000.
+    // I peaks when S drops to (gamma+mu)*n/beta = 0.32*1000/0.8 = 400.
+    // With S=600 and I=300, S falls ~14 per step → peak around step 14.
+    const params = { ...SIRD_DEFAULTS, beta: 0.8, gamma: 0.3, mu: 0.02, n: 1000, i0: 300 }
+    useSimulationStore.setState({
+      ...getInitialState(),
+      params,
+      status: RUN_STATUS.RUNNING,
+      current: { s: 600, i: 300, r: 80, d: 20 },
+      simTime: 1.0, // past t=0 so auto-stop can fire (but I is large so it won't)
+      recordAcc: 0,
+      _peakInfected: 300,
+      _peakDay: 1.0,
+      metrics: {
+        r0: params.beta / (params.gamma + params.mu),
+        cfr: params.mu / (params.gamma + params.mu),
+        herdImmunityThreshold: 1 - 1 / (params.beta / (params.gamma + params.mu)),
+        peakInfected: 300,
+        peakDay: 1.0,
+        totalDeaths: 20,
+        durationDays: 1.0,
+      },
+    })
+
+    // Independently track the true maximum I across all 20 steps
     let trackedMax = useSimulationStore.getState().current.i
     for (let k = 0; k < STEPS_PER_INTERVAL * 2; k++) {
       useSimulationStore.getState().step()
       const currentI = useSimulationStore.getState().current.i
       if (currentI > trackedMax) trackedMax = currentI
     }
+
+    const iAtStep20 = useSimulationStore.getState().current.i
     const metricsAfter = useSimulationStore.getState().metrics
-    // The stored peak should match the max we independently tracked
+
+    // The true peak must exceed the I value at step 20 (I is declining by then)
+    expect(trackedMax).toBeGreaterThan(iAtStep20)
+    // The stored peakInfected must match the continuous per-step max, not iAtStep20
     expect(metricsAfter.peakInfected).toBeCloseTo(trackedMax, 6)
+    expect(metricsAfter.peakInfected).toBeGreaterThan(iAtStep20)
   })
 })
 

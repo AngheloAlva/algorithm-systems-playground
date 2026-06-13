@@ -104,8 +104,11 @@ export function useSimulationLoop({ speed, isRunning, step }: UseSimulationLoopO
         if (!isRunningRef.current) return
       }
 
-      // Re-queue for the next frame
-      rafRef.current = requestAnimationFrame((t) => tickRef.current(t))
+      // Re-queue for the next frame only if the loop should still continue.
+      // isRunningRef may have been set to false by a step() auto-stop above.
+      if (isRunningRef.current) {
+        rafRef.current = requestAnimationFrame((t) => tickRef.current(t))
+      }
     }
   })
 

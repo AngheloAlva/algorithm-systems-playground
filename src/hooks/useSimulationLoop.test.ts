@@ -219,6 +219,43 @@ describe("useSimulationLoop", () => {
   })
 
   // -------------------------------------------------------------------------
+  // FIX D — rAF NOT re-queued after auto-stop (isRunning false post-loop)
+  // -------------------------------------------------------------------------
+
+  it("rAF is NOT re-queued on the frame where isRunning becomes false (auto-stop guard)", () => {
+    const requestAnimationFrameMock = vi.mocked(window.requestAnimationFrame)
+    const step = vi.fn()
+    const { rerender } = renderHook(
+      ({ isRunning }: { isRunning: boolean }) =>
+        useSimulationLoop({ speed: 4, isRunning, step }),
+      { initialProps: { isRunning: true } }
+    )
+
+    // Frame 1: establishes baseline (isRunning = true, re-queue fires)
+    act(() => {
+      flushRaf(16)
+    })
+    const rafCountAfterRunningFrame = requestAnimationFrameMock.mock.calls.length
+
+    // Transition to stopped (simulates auto-stop or pause)
+    rerender({ isRunning: false })
+
+    // Capture count right after stop transition (before any more frames)
+    const rafCountAfterStop = requestAnimationFrameMock.mock.calls.length
+
+    // Flush a frame — the top-of-callback guard fires; loop must NOT re-queue
+    act(() => {
+      flushRaf(16)
+    })
+    const rafCountAfterStopFrame = requestAnimationFrameMock.mock.calls.length
+
+    // The running frame did re-queue (sanity check)
+    expect(rafCountAfterRunningFrame).toBeGreaterThan(0)
+    // After the stop frame, no new rAF should have been scheduled
+    expect(rafCountAfterStopFrame).toBe(rafCountAfterStop)
+  })
+
+  // -------------------------------------------------------------------------
   // rAF re-queues itself each frame while running
   // -------------------------------------------------------------------------
 
