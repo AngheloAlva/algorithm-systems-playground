@@ -83,6 +83,43 @@ describe("useDashboardStore", () => {
   })
 
   // ---------------------------------------------------------------------------
+  // setSeed
+  // ---------------------------------------------------------------------------
+
+  describe("setSeed", () => {
+    it("sets seed to the given value", () => {
+      getState().setSeed(7)
+      expect(useDashboardStore.getState().seed).toBe(7)
+    })
+
+    it("triggers recompute — snapshot is populated after setSeed", () => {
+      getState().setSeed(99)
+      const state = useDashboardStore.getState()
+      expect(state.snapshot).not.toBeNull()
+      expect(state.sweep).not.toBeNull()
+      expect(state.status).toBe(RUN_STATUS.DONE)
+    })
+
+    it("is deterministic: setSeed(7) produces same snapshot as config with seed=7", () => {
+      getState().setSeed(7)
+      const rows1 = useDashboardStore.getState().snapshot!.rows
+
+      useDashboardStore.setState({
+        arrayLength: DASHBOARD_STORE_DEFAULTS.arrayLength,
+        arrayMode: DASHBOARD_STORE_DEFAULTS.arrayMode,
+        seed: 7,
+        snapshot: null,
+        sweep: null,
+        status: RUN_STATUS.IDLE,
+      })
+      getState().recompute()
+      const rows2 = useDashboardStore.getState().snapshot!.rows
+
+      expect(rows1).toEqual(rows2)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
   // setArrayMode
   // ---------------------------------------------------------------------------
 

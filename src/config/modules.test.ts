@@ -21,4 +21,10 @@ describe("modules config", () => {
     expect(pathfinding?.status).toBe(MODULE_STATUS.AVAILABLE)
     expect(graphs?.status).toBe(MODULE_STATUS.AVAILABLE)
   })
+
+  it("dashboard module status is AVAILABLE (Slice C activation)", () => {
+    const dashboard = MODULES.find((m) => m.slug === "dashboard")
+    expect(dashboard).toBeDefined()
+    expect(dashboard?.status).toBe(MODULE_STATUS.AVAILABLE)
+  })
 })

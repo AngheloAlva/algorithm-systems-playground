@@ -91,6 +91,7 @@ export interface DashboardState {
   // Actions
   setArrayLength: (len: number) => void
   setArrayMode: (mode: ArrayMode) => void
+  setSeed: (seed: number) => void
   regenerate: () => void
   recompute: () => void
 }
@@ -128,6 +129,11 @@ export const useDashboardStore = create<DashboardState>()((set, get) => ({
 
   setArrayMode(mode: ArrayMode) {
     set({ arrayMode: mode })
+    get().recompute()
+  },
+
+  setSeed(seed: number) {
+    set({ seed })
     get().recompute()
   },
 
