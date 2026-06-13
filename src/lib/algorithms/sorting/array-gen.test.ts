@@ -148,6 +148,18 @@ describe("ArrayMode type", () => {
 })
 
 // ---------------------------------------------------------------------------
+// PRNG fixture — guards against inadvertent PRNG algorithm swap
+// ---------------------------------------------------------------------------
+
+describe("generateArray — PRNG output fixture (SEED-3)", () => {
+	it("generateArray(10, 'random', 42) returns the exact hardcoded fixture", () => {
+		// Captured from mulberry32(42) Fisher-Yates shuffle of [1..10].
+		// If this test fails, the PRNG implementation changed — update intentionally.
+		expect(generateArray(10, "random", 42)).toEqual([1, 8, 4, 6, 3, 2, 9, 10, 5, 7])
+	})
+})
+
+// ---------------------------------------------------------------------------
 // SEED-1 — Deterministic RANDOM mode with seed
 // ---------------------------------------------------------------------------
 
