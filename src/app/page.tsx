@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function HomePage() {
 	return (
-		<main className="flex flex-1 flex-col gap-10 p-6 md:p-10">
+		<div className="flex flex-1 flex-col gap-10 p-6 md:p-10">
 			{/* Intro */}
 			<section className="flex flex-col gap-3">
 				<h1 className="text-foreground text-3xl font-bold tracking-tight">
@@ -73,6 +73,6 @@ export default function HomePage() {
 					})}
 				</ul>
 			</section>
-		</main>
+		</div>
 	)
 }

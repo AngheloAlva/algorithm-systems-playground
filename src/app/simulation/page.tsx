@@ -23,7 +23,7 @@ export const metadata: Metadata = {
  */
 export default function SimulationPage() {
   return (
-    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+    <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
       {/* Server-rendered header */}
       <header className="flex flex-col gap-1">
         <h1 className="text-foreground text-2xl font-bold tracking-tight">{mod.title}</h1>
@@ -40,6 +40,6 @@ export default function SimulationPage() {
       >
         <SimulationVisualizer />
       </Suspense>
-    </main>
+    </div>
   )
 }

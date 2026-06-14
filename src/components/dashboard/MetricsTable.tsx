@@ -62,14 +62,9 @@ export function MetricsTable({ rows }: MetricsTableProps) {
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-foreground">
                     {isMerge ? (
-                      <span>
+                      <span data-testid="table-merge-swaps-note">
                         {row.swaps}
-                        <span
-                          data-testid="table-merge-swaps-note"
-                          title="Merge Sort places elements rather than swapping — swap count is 0 by design."
-                          className="ml-1 cursor-help text-muted-foreground sr-only"
-                          aria-label="Merge Sort places elements, not swaps — 0 by design"
-                        >
+                        <span className="ml-1 text-muted-foreground sr-only">
                           Merge Sort places elements, not swaps — 0 by design
                         </span>
                         <span aria-hidden="true" className="ml-1 text-muted-foreground">*</span>

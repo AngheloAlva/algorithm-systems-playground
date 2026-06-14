@@ -36,6 +36,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full bg-background text-foreground">
+        {/* Skip link — WCAG 2.4.1: first focusable element, bypasses navigation */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-md focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          Skip to main content
+        </a>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -47,12 +54,12 @@ export default function RootLayout({
               {/* Sidebar — off-canvas on mobile, collapsible rail on desktop */}
               <AppSidebar />
 
-              {/* Main content region */}
-              <SidebarInset>
+              {/* Main content region — SidebarInset renders <main>, so it IS the landmark */}
+              <SidebarInset id="main-content" tabIndex={-1}>
                 <SiteHeader />
-                <main className="flex flex-1 flex-col overflow-auto p-6">
+                <div className="flex flex-1 flex-col overflow-auto p-6">
                   {children}
-                </main>
+                </div>
               </SidebarInset>
             </SidebarProvider>
           </TooltipProvider>

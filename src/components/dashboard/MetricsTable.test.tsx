@@ -84,4 +84,17 @@ describe("MetricsTable", () => {
     // Note must convey information about merge sorting placing elements
     expect(note.textContent).toMatch(/place|merge|0/i)
   })
+
+  it("merge-swaps testid targets the outer span containing the numeric swap value (REQ-CARRY-2)", () => {
+    // The testid must be on the outer <span> (not the sr-only inner span),
+    // so its textContent includes the numeric swap count for Merge Sort.
+    render(<MetricsTable rows={SAMPLE_ROWS} />)
+    const outerSpan = screen.getByTestId("table-merge-swaps-note")
+    // The outer span's text must include the swap number "0" as rendered numeric value
+    // (not just the sr-only label text that also happens to contain "0")
+    // We assert the element is NOT the sr-only span by checking it has no sr-only class
+    expect(outerSpan.classList.contains("sr-only")).toBe(false)
+    // And its text content begins with the numeric value (the outer span renders swap count first)
+    expect(outerSpan.textContent).toMatch(/^0/)
+  })
 })
