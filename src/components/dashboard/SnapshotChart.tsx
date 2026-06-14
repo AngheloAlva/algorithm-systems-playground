@@ -6,8 +6,9 @@
  * Shows comparisons and swaps per algorithm as side-by-side bars.
  * The Merge Sort swaps=0 note is rendered below the chart per spec UI-1.
  *
- * Chart conventions (ADR-D): ResponsiveContainer, isAnimationActive={false},
- * CartesianGrid with hsl(var(--border)), fontSize 11 ticks, Legend.
+ * Chart conventions (ADR-D): ResponsiveContainer, isAnimationActive={!reduced}
+ * (gated via useReducedMotion, REQ-ANIM-5), CartesianGrid with hsl(var(--border)),
+ * fontSize 11 ticks, Legend.
  *
  * Spec: UI-1
  */
@@ -23,6 +24,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import type { BarChartRow } from "@/store/dashboard-store"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 // ---------------------------------------------------------------------------
 // Bar series colors — primary token for comparisons, muted for swaps
@@ -47,6 +49,7 @@ interface SnapshotChartProps {
 // ---------------------------------------------------------------------------
 
 export function SnapshotChart({ rows }: SnapshotChartProps) {
+  const reduced = useReducedMotion()
   return (
     <div
       role="img"
@@ -79,13 +82,13 @@ export function SnapshotChart({ rows }: SnapshotChartProps) {
             dataKey="comparisons"
             name="Comparisons"
             fill={BAR_COLORS.comparisons}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
           <Bar
             dataKey="swaps"
             name="Swaps"
             fill={BAR_COLORS.swaps}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
         </BarChart>
       </ResponsiveContainer>

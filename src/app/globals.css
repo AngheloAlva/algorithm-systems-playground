@@ -17,14 +17,14 @@
 	--secondary: oklch(0.97 0 0);
 	--secondary-foreground: oklch(0.205 0 0);
 	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
+	--muted-foreground: oklch(0.525 0 0); /* was 0.556 → 0.540 → 0.525; tightened to ~5.0:1 on --muted bg (WCAG 1.4.3, rounding headroom) */
 	--accent: oklch(0.97 0 0);
 	--accent-foreground: oklch(0.205 0 0);
 	--destructive: oklch(0.577 0.245 27.325);
 	--destructive-foreground: oklch(0.985 0 0);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
+	--ring: oklch(0.630 0 0); /* was 0.708; darkened to pass 3:1 focus-ring contrast (WCAG 1.4.11) */
 	--radius: 0.625rem;
 
 	/* Sidebar-specific tokens */
@@ -35,7 +35,7 @@
 	--sidebar-accent: oklch(0.97 0 0);
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
+	--sidebar-ring: oklch(0.630 0 0); /* was 0.708; aligned with --ring fix (WCAG 1.4.11) */
 	--background: oklch(1 0 0);
 	--foreground: oklch(0.145 0 0);
 	--chart-1: oklch(0.87 0 0);
@@ -266,5 +266,22 @@
 	}
 	html {
 		@apply font-sans;
+	}
+}
+
+/* ── Reduced motion gate (REQ-ANIM-5, REQ-A11Y-4, WCAG 2.3 / AAA) ──── */
+/* Belt-and-suspenders: neutralises CSS animations and transitions        */
+/* app-wide when the user has requested reduced motion in their OS.       */
+/* JS gate: useReducedMotion() hook controls Recharts isAnimationActive.  */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-delay: -1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
 	}
 }
