@@ -5,6 +5,15 @@ import HomePage from "./page"
 import { MODULES } from "@/config/modules"
 
 describe("HomePage", () => {
+	it("root element is NOT a <main> — layout owns the single main landmark (REQ-A11Y-2)", () => {
+		// The layout.tsx already wraps all pages in a <main>. If page.tsx also renders
+		// a <main>, it creates a duplicate landmark. The outermost wrapper must be a
+		// non-landmark element (<div> or <section>).
+		const { container } = render(<HomePage />)
+		// The component tree rendered by HomePage must not contain a <main> element
+		const mainElements = container.querySelectorAll("main")
+		expect(mainElements.length).toBe(0)
+	})
 	it("renders the application intro heading", () => {
 		render(<HomePage />)
 		expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(

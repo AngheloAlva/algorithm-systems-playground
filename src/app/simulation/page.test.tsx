@@ -45,6 +45,12 @@ describe("SimulationPage", () => {
     expect(() => render(<SimulationPage />)).not.toThrow()
   })
 
+  it("root element is NOT a <main> — layout owns the single main landmark (REQ-A11Y-2)", () => {
+    const { container } = render(<SimulationPage />)
+    const mainElements = container.querySelectorAll("main")
+    expect(mainElements.length).toBe(0)
+  })
+
   it("does NOT render EmptyState — renders SimulationVisualizer instead (SIM6.2)", () => {
     render(<SimulationPage />)
     // The page must mount the SimulationVisualizer (mocked as data-testid="simulation-visualizer").

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, act } from "@testing-library/react"
 
 // ---------------------------------------------------------------------------
 // next/navigation mock
@@ -123,5 +123,29 @@ describe("BenchmarkControls", () => {
     // Verify store is updated via setArrayLength
     expect(setArrayLengthSpy).toHaveBeenCalledWith(120)
     expect(useDashboardStore.getState().arrayLength).not.toBe(120) // spy replaced real fn
+  })
+
+  it("mode-select onValueChange wires through to store setArrayMode (REQ-CARRY-1)", async () => {
+    // Spy on setArrayMode to assert the control→store chain
+    const setArrayModeSpy = vi.fn()
+    useDashboardStore.setState({ setArrayMode: setArrayModeSpy })
+
+    const { container } = render(<BenchmarkControls />)
+
+    // Base UI Select renders a visually-hidden <input aria-hidden="true"> for form/autofill.
+    // Firing a change event on it (with a valid mode value) exercises the component's
+    // onValueChange → handleModeChange → setArrayMode path via queueMicrotask.
+    const hiddenInput = container.querySelector('input[aria-hidden="true"]')
+    expect(hiddenInput).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.change(hiddenInput!, { target: { value: "sorted" } })
+      // Flush the queueMicrotask scheduled inside Base UI's hidden input onChange handler
+      await Promise.resolve()
+    })
+
+    // setArrayMode should be called once with the selected mode
+    expect(setArrayModeSpy).toHaveBeenCalledOnce()
+    expect(setArrayModeSpy).toHaveBeenCalledWith("sorted")
   })
 })
