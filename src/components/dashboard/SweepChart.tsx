@@ -8,8 +8,9 @@
  *
  * Visualizes O(n²) vs O(n log n) divergence.
  *
- * Chart conventions (ADR-D): ResponsiveContainer, isAnimationActive={false},
- * CartesianGrid with hsl(var(--border)), fontSize 11 ticks, Legend verticalAlign="top".
+ * Chart conventions (ADR-D): ResponsiveContainer, isAnimationActive={!reduced}
+ * (gated via useReducedMotion, REQ-ANIM-5), CartesianGrid with hsl(var(--border)),
+ * fontSize 11 ticks, Legend verticalAlign="top".
  *
  * Spec: UI-2
  */
@@ -25,6 +26,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import type { SweepChartRow } from "@/store/dashboard-store"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 // ---------------------------------------------------------------------------
 // Algorithm color palette (design ADR-D) — distinct hues, WCAG non-color
@@ -52,6 +54,7 @@ interface SweepChartProps {
 // ---------------------------------------------------------------------------
 
 export function SweepChart({ data }: SweepChartProps) {
+  const reduced = useReducedMotion()
   return (
     <div
       role="img"
@@ -98,7 +101,7 @@ export function SweepChart({ data }: SweepChartProps) {
             stroke={ALGO_COLORS.bubble}
             dot={false}
             strokeWidth={1.5}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
           <Line
             type="monotone"
@@ -107,7 +110,7 @@ export function SweepChart({ data }: SweepChartProps) {
             stroke={ALGO_COLORS.insertion}
             dot={false}
             strokeWidth={1.5}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
           <Line
             type="monotone"
@@ -116,7 +119,7 @@ export function SweepChart({ data }: SweepChartProps) {
             stroke={ALGO_COLORS.quick}
             dot={false}
             strokeWidth={1.5}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
           <Line
             type="monotone"
@@ -125,7 +128,7 @@ export function SweepChart({ data }: SweepChartProps) {
             stroke={ALGO_COLORS.merge}
             dot={false}
             strokeWidth={1.5}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
           <Line
             type="monotone"
@@ -134,7 +137,7 @@ export function SweepChart({ data }: SweepChartProps) {
             stroke={ALGO_COLORS.heap}
             dot={false}
             strokeWidth={1.5}
-            isAnimationActive={false}
+            isAnimationActive={!reduced}
           />
         </LineChart>
       </ResponsiveContainer>

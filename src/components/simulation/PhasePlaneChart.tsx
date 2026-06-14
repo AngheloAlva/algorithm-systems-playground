@@ -25,6 +25,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import type { SeriesPoint } from "@/lib/simulation/sird"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 // ---------------------------------------------------------------------------
 // Props
@@ -39,6 +40,7 @@ interface PhasePlaneChartProps {
 // ---------------------------------------------------------------------------
 
 export function PhasePlaneChart({ ticks }: PhasePlaneChartProps) {
+  const reduced = useReducedMotion()
   // Derive parametric data: x = susceptible, y = infected, in time order.
   // Derived inline; cheap at ≤160 points — no manual useMemo needed.
   const data = ticks.map((p) => ({ x: p.s, y: p.i }))
@@ -75,7 +77,7 @@ export function PhasePlaneChart({ ticks }: PhasePlaneChartProps) {
           dot={false}
           name="I"
           strokeWidth={1.5}
-          isAnimationActive={false}
+          isAnimationActive={!reduced}
         />
       </LineChart>
     </ResponsiveContainer>

@@ -25,6 +25,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import type { SeriesPoint } from "@/lib/simulation/sird"
+import { useReducedMotion } from "@/hooks/use-reduced-motion"
 
 // ---------------------------------------------------------------------------
 // Series color palette (--viz token-style hand-picked distinct hues)
@@ -52,6 +53,7 @@ interface TimeSeriesChartProps {
 // ---------------------------------------------------------------------------
 
 export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
+  const reduced = useReducedMotion()
   const showHerdLine = typeof herdLine === "number" && Number.isFinite(herdLine)
 
   return (
@@ -84,7 +86,7 @@ export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
           dot={false}
           name="S"
           strokeWidth={1.5}
-          isAnimationActive={false}
+          isAnimationActive={!reduced}
         />
         <Line
           type="monotone"
@@ -93,7 +95,7 @@ export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
           dot={false}
           name="I"
           strokeWidth={1.5}
-          isAnimationActive={false}
+          isAnimationActive={!reduced}
         />
         <Line
           type="monotone"
@@ -102,7 +104,7 @@ export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
           dot={false}
           name="R"
           strokeWidth={1.5}
-          isAnimationActive={false}
+          isAnimationActive={!reduced}
         />
         <Line
           type="monotone"
@@ -111,7 +113,7 @@ export function TimeSeriesChart({ ticks, herdLine }: TimeSeriesChartProps) {
           dot={false}
           name="D"
           strokeWidth={1.5}
-          isAnimationActive={false}
+          isAnimationActive={!reduced}
         />
 
         {/* Optional herd-immunity threshold annotation (ADR-4) */}
