@@ -16,6 +16,7 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { MODULES } from "@/config/modules"
+import { TransitionLink } from "@/components/transitions/transition-link"
 
 export function AppSidebar() {
 	const pathname = usePathname()
@@ -45,7 +46,7 @@ export function AppSidebar() {
 									<SidebarMenuButton
 										isActive={pathname === "/"}
 										tooltip="Home"
-										render={<Link href="/" aria-current={pathname === "/" ? "page" : undefined} />}
+										render={<TransitionLink href="/" aria-current={pathname === "/" ? "page" : undefined} />}
 									>
 										<HomeIcon />
 										<span>Home</span>
@@ -70,7 +71,7 @@ export function AppSidebar() {
 											<SidebarMenuButton
 												isActive={isActive}
 												tooltip={mod.title}
-												render={<Link href={href} aria-current={isActive ? "page" : undefined} />}
+												render={<TransitionLink href={href} aria-current={isActive ? "page" : undefined} />}
 											>
 												<Icon />
 												<span>{mod.title}</span>

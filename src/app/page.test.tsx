@@ -1,8 +1,46 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+
+// ---------------------------------------------------------------------------
+// Mocks required by TransitionLink (used inside ModuleGrid → HomePage)
+// ---------------------------------------------------------------------------
+
+// Stable module-level push mock so navigation assertions across tests are reliable
+const mockPush = vi.fn()
+
+vi.mock("next/navigation", () => ({
+	useRouter: () => ({ push: mockPush }),
+	usePathname: () => "/",
+}))
+
+vi.mock("@/hooks/use-reduced-motion", () => ({
+	useReducedMotion: () => false,
+}))
+
+// ViewTransitionsProvider is now used by TransitionLink
+vi.mock("@/components/transitions/view-transitions-provider", () => ({
+	useViewTransitionRouter: () => ({ transitionTo: mockPush }),
+	ViewTransitionsProvider: ({ children }: { children: React.ReactNode }) => children,
+}))
+
+vi.mock("next/link", () => ({
+	default: ({
+		href,
+		children,
+		...rest
+	}: { href: string; children: React.ReactNode; [key: string]: unknown }) => (
+		<a href={href} {...rest}>
+			{children}
+		</a>
+	),
+}))
 
 import HomePage from "./page"
 import { MODULES } from "@/config/modules"
+
+beforeEach(() => {
+	mockPush.mockReset()
+})
 
 describe("HomePage", () => {
 	it("root element is NOT a <main> — layout owns the single main landmark (REQ-A11Y-2)", () => {

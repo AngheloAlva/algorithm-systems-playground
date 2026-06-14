@@ -269,11 +269,54 @@
 	}
 }
 
-/* ── Reduced motion gate (REQ-ANIM-5, REQ-A11Y-4, WCAG 2.3 / AAA) ──── */
-/* Belt-and-suspenders: neutralises CSS animations and transitions        */
-/* app-wide when the user has requested reduced motion in their OS.       */
-/* JS gate: useReducedMotion() hook controls Recharts isAnimationActive.  */
+/* ── View Transition cross-fade (REQ-ANIM Slice C) ───────────────────── */
+/* Triggered by document.startViewTransition() in TransitionLink.         */
+/* Applies to the root snapshot; 200 ms tasteful fade with a subtle       */
+/* positional shift on the incoming view.                                 */
+
+@keyframes vt-fade-out {
+	from {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+}
+
+@keyframes vt-fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+::view-transition-old(root) {
+	animation: vt-fade-out 200ms ease-out both;
+}
+
+::view-transition-new(root) {
+	animation: vt-fade-in 200ms ease-out both;
+}
+
+/* ── Reduced-motion guard (REQ-ANIM-5, REQ-A11Y-4, WCAG 2.3 / AAA) ──── */
+/* Belt-and-suspenders: the JS layer (ViewTransitionsProvider +            */
+/* useReducedMotion) already skips startViewTransition when reduced        */
+/* motion is requested. These CSS rules ensure any animations that slip    */
+/* through are also suppressed.                                            */
+/*                                                                         */
+/* NOTE: The ::view-transition-* rules are listed separately from the *    */
+/* rule because ::view-transition-group/old/new are pseudo-elements that   */
+/* do NOT match the universal selector (*). They must be targeted          */
+/* explicitly to neutralise view transition animations under reduced        */
+/* motion. Both blocks are intentionally inside the same @media query.     */
 @media (prefers-reduced-motion: reduce) {
+	/* App-wide: neutralise CSS animations and transitions */
 	*,
 	*::before,
 	*::after {
@@ -283,5 +326,13 @@
 		transition-duration: 0.01ms !important;
 		transition-delay: 0ms !important;
 		scroll-behavior: auto !important;
+	}
+
+	/* View transition pseudo-elements: * above does NOT match these */
+	::view-transition-group(*),
+	::view-transition-image-pair(*),
+	::view-transition-old(*),
+	::view-transition-new(*) {
+		animation: none !important;
 	}
 }
