@@ -8,10 +8,22 @@ No algorithm logic is imported from external libraries. Every core implementatio
 
 | Module | Route | Status | What it shows |
 |--------|-------|--------|---------------|
-| Pathfinding | `/pathfinding` | Coming soon | A\*, Dijkstra, BFS, DFS on interactive grid mazes |
-| Graphs | `/graphs` | Coming soon | Graph traversal, shortest paths, connectivity algorithms |
-| Simulation | `/simulation` | Coming soon | Step-by-step algorithm simulations with configurable parameters |
-| Dashboard | `/dashboard` | Coming soon | Algorithm performance comparisons with real-time metrics |
+| Pathfinding | `/pathfinding` | ✅ Available | A\*, Dijkstra, BFS, DFS on interactive grid mazes |
+| Graphs | `/graphs` | ✅ Available | Graph traversal, shortest paths, connectivity algorithms |
+| Simulation | `/simulation` | ✅ Available | Step-by-step algorithm simulations with configurable parameters |
+| Dashboard | `/dashboard` | ✅ Available | Algorithm performance comparisons with real-time metrics |
+
+## Screenshots
+
+| Pathfinding | Graphs |
+|-------------|--------|
+| ![Pathfinding module](public/screenshots/pathfinding.png) | ![Graphs module](public/screenshots/graphs.png) |
+
+| Simulation | Dashboard |
+|------------|-----------|
+| ![Simulation module](public/screenshots/simulation.png) | ![Dashboard module](public/screenshots/dashboard.png) |
+
+The [home page](public/screenshots/home.png) links into each module.
 
 ## Stack
 
@@ -63,7 +75,7 @@ pnpm build
 
 ## Test status
 
-Tests run with `pnpm test` and are colocated next to source files using `*.test.ts` / `*.test.tsx`. No E2E tests yet (planned for Phase 5).
+Unit and component tests run with `pnpm test` (Vitest) and are colocated next to source files using `*.test.ts` / `*.test.tsx`. End-to-end and accessibility tests run with `pnpm test:e2e` (Playwright + `@axe-core/playwright`) from `tests/e2e/`, covering all five routes in light and dark themes; they also run in CI on every pull request.
 
 ## Project phases
 
@@ -74,4 +86,4 @@ Tests run with `pnpm test` and are colocated next to source files using `*.test.
 | 2 — Graphs | Graph data structures and traversal algorithms |
 | 3 — Simulation | Discrete event simulation with step control |
 | 4 — Dashboard | Cross-algorithm benchmarks and metrics |
-| 5 — Polish | Accessibility audit, animations, screenshots |
+| 5 — Polish | WCAG accessibility audit (skip link, single landmark, contrast, reduced motion), View Transitions, E2E + axe in CI, screenshots — ✅ complete |
