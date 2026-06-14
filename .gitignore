@@ -12,6 +12,12 @@
 
 # testing
 /coverage
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/blob-report/
+# Playwright MCP tool artifact directory — never commit
+/.playwright-mcp/
 
 # next.js
 /.next/
