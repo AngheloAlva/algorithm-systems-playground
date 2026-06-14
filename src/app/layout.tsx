@@ -7,6 +7,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { SiteHeader } from "@/components/layout/site-header";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ViewTransitionsProvider } from "@/components/transitions/view-transitions-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,18 +51,22 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <TooltipProvider>
-            <SidebarProvider>
-              {/* Sidebar — off-canvas on mobile, collapsible rail on desktop */}
-              <AppSidebar />
+            {/* ViewTransitionsProvider wraps the full SidebarProvider subtree so
+                AppSidebar's TransitionLinks are covered by the VT context. */}
+            <ViewTransitionsProvider>
+              <SidebarProvider>
+                {/* Sidebar — off-canvas on mobile, collapsible rail on desktop */}
+                <AppSidebar />
 
-              {/* Main content region — SidebarInset renders <main>, so it IS the landmark */}
-              <SidebarInset id="main-content" tabIndex={-1}>
-                <SiteHeader />
-                <div className="flex flex-1 flex-col overflow-auto p-6">
-                  {children}
-                </div>
-              </SidebarInset>
-            </SidebarProvider>
+                {/* Main content region — SidebarInset renders <main>, so it IS the landmark */}
+                <SidebarInset id="main-content" tabIndex={-1}>
+                  <SiteHeader />
+                  <div className="flex flex-1 flex-col overflow-auto p-6">
+                    {children}
+                  </div>
+                </SidebarInset>
+              </SidebarProvider>
+            </ViewTransitionsProvider>
           </TooltipProvider>
         </ThemeProvider>
       </body>

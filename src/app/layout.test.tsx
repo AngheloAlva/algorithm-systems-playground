@@ -48,6 +48,11 @@ vi.mock("@/components/ui/tooltip", () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
+// Mock ViewTransitionsProvider — it calls useRouter/usePathname which require App Router
+vi.mock("@/components/transitions/view-transitions-provider", () => ({
+  ViewTransitionsProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
+
 import RootLayout from "./layout"
 
 // ---------------------------------------------------------------------------
