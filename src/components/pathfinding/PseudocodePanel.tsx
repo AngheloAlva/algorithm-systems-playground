@@ -41,29 +41,37 @@ export function PseudocodePanel() {
 				{label} pseudocode
 			</h3>
 
-			<ol
-				className="border-border bg-muted/30 max-h-48 overflow-y-auto rounded-md border p-2"
+			{/* role="region" + aria-label wraps the scroll container so AT announces it as a
+			    named landmark. tabIndex enables keyboard scroll (WCAG 2.1.1). The inner <ol>
+			    retains its implicit list role so <li> items remain valid list children.
+			    role="region" MUST NOT be on <ol> directly — that would invalidate <li> items. */}
+			<div
+				role="region"
 				aria-label={`${label} pseudocode`}
+				tabIndex={0}
+				className="border-border bg-muted/30 max-h-48 overflow-y-auto rounded-md border p-2"
 			>
-				{pseudocode.map((line) => {
-					const isActive = line.id === activeLine
-					return (
-						<li
-							key={line.id}
-							ref={isActive ? activeLineRef : null}
-							aria-current={isActive ? "step" : undefined}
-							className={[
-								"rounded px-2 py-0.5 font-mono text-xs transition-colors",
-								isActive
-									? "bg-primary/15 text-primary font-semibold"
-									: "text-muted-foreground",
-							].join(" ")}
-						>
-							{line.text}
-						</li>
-					)
-				})}
-			</ol>
+				<ol>
+					{pseudocode.map((line) => {
+						const isActive = line.id === activeLine
+						return (
+							<li
+								key={line.id}
+								ref={isActive ? activeLineRef : null}
+								aria-current={isActive ? "step" : undefined}
+								className={[
+									"rounded px-2 py-0.5 font-mono text-xs transition-colors",
+									isActive
+										? "bg-primary/15 text-primary font-semibold"
+										: "text-muted-foreground",
+								].join(" ")}
+							>
+								{line.text}
+							</li>
+						)
+					})}
+				</ol>
+			</div>
 		</div>
 	)
 }

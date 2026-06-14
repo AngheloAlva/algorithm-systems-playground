@@ -107,10 +107,14 @@ describe("PseudocodePanel", () => {
 
 	it("panel list is accessible via aria-label", () => {
 		setupStore("astar", -1)
-		render(<PseudocodePanel />)
+		const { container } = render(<PseudocodePanel />)
 
-		// The <ol> has aria-label
-		const list = screen.getByRole("list", { name: /A\* pseudocode/i })
-		expect(list).toBeInTheDocument()
+		// A <div role="region"> wraps the <ol> so AT announces the scroll container
+		// as a named landmark while the <ol> retains its implicit list semantics.
+		const region = screen.getByRole("region", { name: /A\* pseudocode/i })
+		expect(region).toBeInTheDocument()
+		// Confirm it is still the <ol> element (list items remain inside it)
+		const items = container.querySelectorAll("li")
+		expect(items.length).toBeGreaterThan(0)
 	})
 })

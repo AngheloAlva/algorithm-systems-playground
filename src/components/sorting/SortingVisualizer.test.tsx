@@ -183,16 +183,22 @@ describe("SortingVisualizer — mount", () => {
 
 	it("renders an array length label in the controls", () => {
 		const { container } = render(<SortingVisualizer />)
-		// Array length label contains "Length:"
-		const lengthLabel = Array.from(container.querySelectorAll("label")).find(
+		// Array length display is a <span aria-hidden="true"> (the Slider Root is a <div>,
+		// not an <input>, so htmlFor cannot link to it — a <label> would be misleading).
+		// The slider input itself is labeled via aria-label="Array length" on the Slider.
+		const lengthDisplay = Array.from(container.querySelectorAll("span, label")).find(
 			(el) => el.textContent?.includes("Length:")
 		)
-		expect(lengthLabel).toBeDefined()
+		expect(lengthDisplay).toBeDefined()
 	})
 
-	it("renders pseudocode list", () => {
+	it("renders pseudocode list with accessible region wrapper", () => {
 		const { container } = render(<SortingVisualizer />)
-		const ol = container.querySelector("ol[aria-label]")
+		// The pseudocode scroll area is a <div role="region" aria-label> wrapping an <ol>.
+		// role="region" MUST NOT be on <ol> directly — that invalidates <li> children.
+		const region = container.querySelector("div[role='region'][aria-label]")
+		expect(region).not.toBeNull()
+		const ol = region?.querySelector("ol")
 		expect(ol).not.toBeNull()
 	})
 })
